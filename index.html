@@ -69,6 +69,40 @@
       </div>
     </details>
 
+    <!-- ===== Word Management ===== -->
+    <details style="margin:10px 0 16px">
+      <summary><strong>📚 단어 관리</strong> — 단어 보기 및 추가하기</summary>
+      <div class="card" style="margin-top:10px">
+        
+        <!-- View Words Section -->
+        <div style="margin-bottom:20px">
+          <h3 style="margin:0 0 10px">🔍 현재 단어 목록</h3>
+          <div class="row" style="margin-bottom:10px">
+            <input type="text" id="word-search" placeholder="단어 또는 뜻 검색..." style="margin-right:10px">
+            <button id="btn-search" class="btn">검색</button>
+            <button id="btn-show-all" class="btn">전체 보기</button>
+          </div>
+          <div id="word-list" style="max-height:300px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:10px;background:#f9f9f9">
+            <div class="muted">검색하거나 "전체 보기"를 클릭해서 단어를 확인하세요.</div>
+          </div>
+        </div>
+
+        <!-- Add Word Section -->
+        <div>
+          <h3 style="margin:0 0 10px">➕ 단어 추가하기</h3>
+          <div class="row" style="margin-bottom:10px">
+            <input type="text" id="new-word" placeholder="영단어 입력..." style="margin-right:10px">
+            <input type="text" id="new-meanings" placeholder="뜻 입력 (여러개면 쉼표로 구분)" style="flex:2">
+          </div>
+          <div class="footer">
+            <button id="btn-add-word" class="btn primary">단어 추가</button>
+            <button id="btn-clear-custom" class="btn">사용자 단어 초기화</button>
+            <span class="muted" id="custom-count">사용자 추가 단어: 0개</span>
+          </div>
+        </div>
+      </div>
+    </details>
+
     <!-- ===== Setup ===== -->
     <div id="setup" class="card">
       <div class="row">
@@ -191,7 +225,11 @@ const norm = __buildNormalizer();
       answer:$('#answer'),submit:$('#btn-submit'),reveal:$('#btn-reveal'),prev:$('#btn-prev'),next:$('#btn-next'),
       feedback:$('#feedback'),fbHead:$('#fb-head'),fbAnalysis:$('#fb-analysis'),fbExamples:$('#fb-examples'),
       final:$('#final'),wronglist:$('#wronglist'),restart:$('#btn-restart'),
-      exportWrong:$('#btn-export-wrong'),exportHtml:$('#btn-export-html')};
+      exportWrong:$('#btn-export-wrong'),exportHtml:$('#btn-export-html'),
+      // Word management elements
+      wordSearch:$('#word-search'),btnSearch:$('#btn-search'),btnShowAll:$('#btn-show-all'),
+      wordList:$('#word-list'),newWord:$('#new-word'),newMeanings:$('#new-meanings'),
+      btnAddWord:$('#btn-add-word'),btnClearCustom:$('#btn-clear-custom'),customCount:$('#custom-count')};
 
     const state={words:[],quiz:[],idx:0,score:0,wrongs:[],answers:[]};
 
@@ -199,6 +237,168 @@ const norm = __buildNormalizer();
     function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a;}
 
     function loadFixedDataset(){try{const raw=$('#fixed-dataset').textContent.trim();const arr=JSON.parse(raw);return arr.map(({w,m})=>({word:w,meanings:m}));}catch(e){alert('단어장(JSON) 파싱 실패: #fixed-dataset 내용을 확인하세요.');return [];}}
+    
+    // Word management functions
+    function getCustomWords() {
+      try {
+        const stored = localStorage.getItem('toeic-custom-words');
+        return stored ? JSON.parse(stored) : [];
+      } catch (e) {
+        console.error('Failed to load custom words:', e);
+        return [];
+      }
+    }
+    
+    function saveCustomWords(words) {
+      try {
+        localStorage.setItem('toeic-custom-words', JSON.stringify(words));
+      } catch (e) {
+        console.error('Failed to save custom words:', e);
+        alert('사용자 단어 저장에 실패했습니다.');
+      }
+    }
+    
+    function getAllWords() {
+      const fixed = loadFixedDataset();
+      const custom = getCustomWords();
+      return [...fixed, ...custom];
+    }
+    
+    function searchWords(query) {
+      const words = getAllWords();
+      if (!query.trim()) return [];
+      
+      const searchTerm = query.toLowerCase();
+      return words.filter(word => 
+        word.word.toLowerCase().includes(searchTerm) ||
+        word.meanings.some(meaning => meaning.toLowerCase().includes(searchTerm))
+      );
+    }
+    
+    function renderWordList(words, maxItems = 100) {
+      if (!words.length) {
+        els.wordList.innerHTML = '<div class="muted">검색 결과가 없습니다.</div>';
+        return;
+      }
+      
+      const displayWords = words.slice(0, maxItems);
+      const html = displayWords.map(word => 
+        `<div style="margin-bottom:8px;padding:8px;background:#fff;border-radius:6px;border:1px solid #e5e7eb">
+          <strong>${word.word}</strong> : ${word.meanings.join(', ')}
+        </div>`
+      ).join('');
+      
+      if (words.length > maxItems) {
+        els.wordList.innerHTML = html + `<div class="muted" style="text-align:center;margin-top:10px">첫 ${maxItems}개 표시됨 (총 ${words.length}개)</div>`;
+      } else {
+        els.wordList.innerHTML = html;
+      }
+    }
+    
+    function addCustomWord() {
+      const word = els.newWord.value.trim();
+      const meaningsStr = els.newMeanings.value.trim();
+      
+      if (!word || !meaningsStr) {
+        alert('영단어와 뜻을 모두 입력해주세요.');
+        return;
+      }
+      
+      const meanings = meaningsStr.split(',').map(m => m.trim()).filter(m => m);
+      if (!meanings.length) {
+        alert('뜻을 올바르게 입력해주세요.');
+        return;
+      }
+      
+      const customWords = getCustomWords();
+      const existing = customWords.find(w => w.word.toLowerCase() === word.toLowerCase());
+      
+      if (existing) {
+        if (confirm(`"${word}" 단어가 이미 존재합니다. 덮어쓰시겠습니까?`)) {
+          existing.meanings = meanings;
+        } else {
+          return;
+        }
+      } else {
+        customWords.push({ word, meanings });
+      }
+      
+      saveCustomWords(customWords);
+      updateCustomCount();
+      updateWordCount();
+      
+      // Clear inputs
+      els.newWord.value = '';
+      els.newMeanings.value = '';
+      
+      alert(`"${word}" 단어가 추가되었습니다!`);
+    }
+    
+    function clearCustomWords() {
+      if (confirm('사용자가 추가한 모든 단어를 삭제하시겠습니까?')) {
+        localStorage.removeItem('toeic-custom-words');
+        updateCustomCount();
+        updateWordCount();
+        alert('사용자 단어가 모두 삭제되었습니다.');
+      }
+    }
+    
+    function updateCustomCount() {
+      const customWords = getCustomWords();
+      els.customCount.textContent = `사용자 추가 단어: ${customWords.length}개`;
+    }
+    
+    function updateWordCount() {
+      const totalWords = getAllWords();
+      els.infoCount.textContent = `현재 세트: ${totalWords.length}개 단어`;
+    }
+    
+    function setupWordManagement() {
+      // Search functionality
+      els.btnSearch.addEventListener('click', () => {
+        const query = els.wordSearch.value.trim();
+        if (!query) {
+          alert('검색어를 입력해주세요.');
+          return;
+        }
+        const results = searchWords(query);
+        renderWordList(results);
+      });
+      
+      // Show all words (limited to prevent performance issues)
+      els.btnShowAll.addEventListener('click', () => {
+        const words = getAllWords();
+        renderWordList(words, 50); // Show first 50 words
+      });
+      
+      // Search on Enter key
+      els.wordSearch.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          els.btnSearch.click();
+        }
+      });
+      
+      // Add word functionality
+      els.btnAddWord.addEventListener('click', addCustomWord);
+      
+      // Clear custom words
+      els.btnClearCustom.addEventListener('click', clearCustomWords);
+      
+      // Add word on Enter key in inputs
+      els.newWord.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          els.newMeanings.focus();
+        }
+      });
+      
+      els.newMeanings.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          addCustomWord();
+        }
+      });
+      
+      updateCustomCount();
+    }
     function buildQuiz(){const n=parseInt(els.selNum.value,10);const type=els.selType.value;const pool=shuffle([...state.words]);if(pool.length===0){alert('세트가 비어 있습니다.');return false;}const sel=pool.slice(0,Math.min(n,pool.length));state.quiz=sel.map(it=>({...it,type}));state.idx=0;state.score=0;state.wrongs=[];state.answers=new Array(state.quiz.length).fill(null);return true;}
     function renderQuestion(){const q=state.quiz[state.idx];if(!q)return;els.sc.textContent=state.score;els.idx.textContent=state.idx+1;els.tot.textContent=state.quiz.length;els.feedback.style.display='none';if(q.type==='word-to-def'){els.qword.textContent=q.word;els.answer.placeholder='뜻(여러 개면 콤마로 입력)…';}else{els.qword.textContent=q.meanings[0];els.answer.placeholder='영단어 입력…';}els.answer.value='';els.answer.disabled=false;els.submit.disabled=false;els.answer.focus();}
     function buildExamples(word,meaning){const s1=`{word} is required for all applicants.`.replace('{word}',word);const t1=`{meaning}는 모든 지원자에게 요구됩니다.`.replace('{meaning}',meaning);const s2=`Please {word} the report by Friday.`.replace('{word}',word);const t2=`금요일까지 보고서를 {meaning} 주세요.`.replace('{meaning}',meaning);const s3=`The company will {word} additional resources.`.replace('{word}',word);const t3=`회사는 추가 자원을 {meaning}할 것입니다.`.replace('{meaning}',meaning);return [{sentence:s1,translation:t1},{sentence:s2,translation:t2},{sentence:s3,translation:t3}];}
@@ -219,7 +419,13 @@ window.addEventListener('unhandledrejection', (e)=>{ const r=e&&e.reason; __boot
 function init(){
   __boot('데이터를 불러오는 중…');
   setTimeout(()=>{ try{ if(document.getElementById('boot').style.display!=='none'){ __boot('지연 감지: 곧 화면을 열어요'); } }catch(_){} }, 2000);
-state.words=loadFixedDataset();els.infoCount.textContent=`현재 세트: ${state.words.length}개 단어`;show('setup');
+  
+  // Load all words (fixed + custom)
+  state.words = getAllWords();
+  updateWordCount();
+  setupWordManagement();
+  show('setup');
+  
       __boot('초기화 완료');
       setTimeout(__bootDone, 300);
       els.start.addEventListener('click',()=>{ if(buildQuiz()){ show('quiz'); renderQuestion(); }});
