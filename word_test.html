@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 통합 영어 학습 플랫폼</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        body { font-family: 'Noto Sans KR', sans-serif; }
+        .mode-select-btn { transition: all 0.2s ease-in-out; }
+        .mode-select-btn:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
+        .quiz-option-btn { transition: background-color 0.2s, border-color 0.2s, transform 0.1s; text-align: left; line-height: 1.5; }
+        .quiz-option-btn:hover:not(:disabled) { transform: translateY(-2px); border-color: #3b82f6; }
+        .quiz-option-btn.correct { background-color: #22c55e !important; border-color: #16a34a !important; color: white; }
+        .quiz-option-btn.incorrect { background-color: #ef4444 !important; border-color: #dc2626 !important; color: white; }
+        .spinner { border-top-color: #3498db; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .analysis-block { white-space: pre-wrap; font-family: 'Noto Sans KR', sans-serif; line-height: 1.8; }
+        .feedback-card { border-left-width: 4px; }
+        #qa-modal { background-color: rgba(0,0,0,0.5); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-4xl bg-white rounded-xl shadow-lg p-6 md:p-8 text-gray-800">
+
+        <!-- ===== Main Menu Screen ===== -->
+        <div id="main-menu-screen">
+            <header class="text-center mb-8">
+                <h1 class="text-3xl md:text-4xl font-bold">AI 통합 영어 학습 플랫폼</h1>
+                <p class="text-gray-600 mt-3">오늘의 학습 목표에 맞는 훈련 모드를 선택하세요.</p>
+            </header>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <button data-mode="vocab" class="mode-select-btn bg-sky-500 text-white p-8 rounded-lg shadow-lg">
+                    <i class="fas fa-bolt fa-2x mb-4"></i>
+                    <h2 class="text-2xl font-bold">빠른 단어 뜻 퀴즈</h2>
+                    <p class="mt-2 text-sky-100">핵심 단어의 의미를 빠르게 복습하며<br>학습을 예열합니다.</p>
+                </button>
+                <button data-mode="reading" class="mode-select-btn bg-purple-600 text-white p-8 rounded-lg shadow-lg">
+                    <i class="fas fa-book-reader fa-2x mb-4"></i>
+                    <h2 class="text-2xl font-bold">AI 논문 독해 트레이너</h2>
+                    <p class="mt-2 text-purple-100">복잡한 문장 구조를 분석하며<br>논리적 독해력을 훈련합니다.</p>
+                </button>
+            </div>
+        </div>
+
+        <!-- ===== Setup Screen ===== -->
+        <div id="setup-screen" class="hidden">
+            <header class="text-center mb-6">
+                <h1 id="setup-title" class="text-2xl md:text-3xl font-bold">훈련 설정</h1>
+                <p class="text-gray-600 mt-2">훈련에 사용할 단어 목록과 문제 수를 설정하세요.</p>
+            </header>
+            <div class="mb-6">
+                <label for="word-list" class="block text-lg font-semibold text-gray-700 mb-2">학습할 단어 목록</label>
+                <textarea id="word-list" rows="10" class="w-full p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"></textarea>
+                <p id="word-count-msg" class="text-sm text-gray-500 mt-2 h-4"></p>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <div>
+                    <label for="num-questions" class="block font-semibold text-gray-700 mb-2">문제 수</label>
+                    <select id="num-questions" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500">
+                        <option value="10">10개</option><option value="20">20개</option><option value="30">30개</option><option value="50">50개</option>
+                    </select>
+                </div>
+            </div>
+            <button id="start-btn" class="w-full mt-4 bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg text-lg transition duration-300 transform hover:scale-105 disabled:bg-gray-400">
+                훈련 시작
+            </button>
+            <div id="loading-container" class="mt-4 hidden items-center justify-center flex-col">
+                <div class="spinner w-8 h-8 rounded-full border-4 border-gray-200"></div>
+                <p id="loading-message" class="ml-4 text-gray-600 mt-4 text-center"></p>
+            </div>
+        </div>
+
+        <!-- ===== Vocab Quiz Screen ===== -->
+        <div id="vocab-quiz-screen" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                 <p class="text-lg font-bold">점수: <span id="vocab-score">0</span></p>
+                <p class="text-lg font-bold"><span id="vocab-current-q">1</span> / <span id="vocab-total-q">10</span></p>
+            </div>
+            <div class="bg-gray-100 p-8 rounded-lg text-center mb-6 shadow-inner">
+                <h2 id="vocab-question-word" class="text-4xl font-bold"></h2>
+            </div>
+            <div id="vocab-answer-options" class="grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+            <div id="vocab-feedback-container" class="mt-6 space-y-4 hidden">
+                <div id="vocab-feedback-header" class="p-3 rounded-lg text-white font-bold text-lg"></div>
+                <div class="feedback-card bg-emerald-50 border-emerald-400 p-4 rounded-lg">
+                    <h4 class="font-bold text-emerald-800"><i class="fas fa-book-open mr-2"></i>정답 분석</h4>
+                    <p id="vocab-feedback-analysis" class="mt-1 text-gray-700"></p>
+                </div>
+                <div class="feedback-card bg-gray-50 border-gray-400 p-4 rounded-lg">
+                    <h4 class="font-bold text-gray-800"><i class="fas fa-sitemap mr-2"></i>다른 선택지</h4>
+                    <div id="vocab-feedback-distractors" class="mt-2 space-y-2 text-gray-700"></div>
+                </div>
+                <div class="feedback-card bg-sky-50 border-sky-400 p-4 rounded-lg">
+                    <h4 class="font-bold text-sky-800"><i class="fas fa-quote-right mr-2"></i>활용 예문</h4>
+                    <div id="vocab-feedback-examples" class="mt-2 space-y-3 text-gray-700"></div>
+                </div>
+            </div>
+            <button id="vocab-next-btn" class="w-full mt-6 bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hidden">다음 문제</button>
+        </div>
+
+        <!-- ===== Reading Trainer Screen ===== -->
+        <div id="reading-trainer-screen" class="hidden">
+            <div class="flex justify-between items-center mb-4">
+                 <p class="text-lg font-bold">점수: <span id="reading-score">0</span></p>
+                <p class="text-lg font-bold"><span id="reading-current-q">1</span> / <span id="reading-total-q">10</span></p>
+            </div>
+            <div class="bg-gray-100 p-6 rounded-lg mb-6 shadow-inner">
+                <p id="reading-instruction" class="font-bold text-gray-700 mb-2 text-lg"></p>
+                <p id="reading-sentence" class="text-xl md:text-2xl font-serif"></p>
+            </div>
+            <div id="reading-answer-options" class="space-y-3"></div>
+            <button id="ask-ai-btn" class="mt-4 text-sm text-blue-600 hover:underline"><i class="fas fa-robot mr-1"></i>이 문제가 이해되지 않나요? AI 조교에게 질문하기</button>
+            <div id="reading-feedback-container" class="mt-6 space-y-4 hidden">
+                <div id="reading-feedback-header" class="p-3 rounded-lg text-white font-bold text-lg"></div>
+                <div class="feedback-card bg-sky-50 border-sky-400 p-4 rounded-lg">
+                    <h4 class="font-bold text-sky-800"><i class="fas fa-language mr-2"></i>문장 해석</h4>
+                    <p id="reading-feedback-translation" class="mt-1 text-gray-700"></p>
+                </div>
+                <div class="feedback-card bg-purple-50 border-purple-400 p-4 rounded-lg">
+                    <h4 class="font-bold text-purple-800"><i class="fas fa-sitemap mr-2"></i>AI 문장 구조 분석</h4>
+                    <div id="reading-feedback-analysis" class="analysis-block mt-2 text-gray-700"></div>
+                </div>
+            </div>
+            <button id="reading-next-btn" class="w-full mt-6 bg-gray-700 hover:bg-gray-800 text-white font-bold py-3 px-6 rounded-lg hidden">다음 문제</button>
+        </div>
+
+        <!-- ===== Results Screen (Shared) ===== -->
+        <div id="results-screen" class="hidden text-center">
+            <h1 class="text-3xl font-bold mb-4">훈련 완료!</h1>
+            <p class="text-xl mb-6">최종 점수: <span id="final-score" class="font-bold"></span>점</p>
+             <div class="bg-gray-100 rounded-lg p-4 mb-6">
+                <h3 class="font-bold text-lg mb-2">오답 노트</h3>
+                <div id="wrong-answers-list" class="text-left max-h-56 overflow-y-auto"></div>
+            </div>
+            <button id="restart-btn" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg">메인 메뉴로 돌아가기</button>
+        </div>
+
+        <!-- ===== Q&A Modal (For Reading Trainer) ===== -->
+        <div id="qa-modal" class="fixed inset-0 w-full h-full flex items-center justify-center hidden z-50">
+            <div class="bg-white rounded-lg shadow-2xl p-6 w-11/12 max-w-lg">
+                <h2 class="text-xl font-bold mb-4">AI 조교에게 질문하기</h2>
+                <div class="bg-gray-100 p-3 rounded-md mb-4">
+                    <p class="text-sm font-bold text-gray-600">원본 문장</p>
+                    <p id="qa-original-sentence" class="text-sm text-gray-800"></p>
+                </div>
+                <textarea id="qa-input" class="w-full p-2 border rounded-md" rows="3" placeholder="예: 이 문장에서 'account for'는 왜 '설명하다'로 해석되나요?"></textarea>
+                <div id="qa-loading" class="hidden mt-4 items-center">
+                    <div class="spinner w-5 h-5 rounded-full border-2 border-gray-200"></div>
+                    <p class="ml-2 text-sm text-gray-600">AI 조교가 답변을 생각하고 있습니다...</p>
+                </div>
+                <div id="qa-response" class="mt-4 p-3 bg-blue-50 border-l-4 border-blue-400 rounded-r-lg text-sm max-h-40 overflow-y-auto hidden"></div>
+                <div class="mt-4 flex justify-end space-x-3">
+                    <button id="qa-close-btn" class="px-4 py-2 bg-gray-200 rounded-lg text-sm hover:bg-gray-300">닫기</button>
+                    <button id="qa-submit-btn" class="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm hover:bg-blue-700">질문 제출</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- WORD LISTS (Combined) ---
+        const oxford3000 = ['a','abandon','ability','able','about','above','abroad','absolute','absolutely','academic','accept','acceptable','access','accident','accommodation','accompany','according','account','accurate','accuse','achieve','achievement','acknowledge','acquire','across','act','action','active','activity','actor','actress','actual','actually','ad','adapt','add','addition','additional','address','administration','admire','admit','adopt','adult','advance','advanced','advantage','adventure','advertise','advertisement','advertising','advice','advise','affair','affect','afford','afraid','after','afternoon','afterwards','again','against','age','aged','agency','agenda','agent','aggressive','ago','agree','agreement','ah','ahead','aid','aim','air','aircraft','airline','airport','alarm','album','alcohol','alcoholic','alive','all','allow','almost','alone','along','already','also','alter','alternative','although','always','amazed','amazing','ambition','ambitious','among','amount','analyse','analysis','ancient','and','anger','angle','angrily','angry','animal','ankle','anniversary','announce','announcement','annoy','annoyed','annoying','annual','another','answer','anxious','any','anybody','anymore','anyone','anything','anyway','anywhere','apart','apartment','apologize','app','apparent','apparently','appeal','appear','appearance','apple','application','apply','appointment','appreciate','approach','appropriate','approval','approve','approximately','april','architect','architecture','area','argue','argument','arise','arm','armed','arms','army','around','arrange','arrangement','arrest','arrival','arrive','art','article','artificial','artist','artistic','as','ashamed','ask','asleep','aspect','assess','assessment','assignment','assist','assistant','associate','associated','association','assume','at','athlete','atmosphere','attach','attack','attempt','attend','attention','attitude','attract','attraction','attractive','audience','august','aunt','author','authority','autumn','available','average','avoid','award','aware','away','awful','baby','back','background','backwards','bacteria','bad','badly','bag','bake','balance','ball','ban','band','bank','bar','barrier','base','baseball','based','basic','basically','basis','basketball','bath','bathroom','battery','battle','be','beach','bean','bear','beat','beautiful','beauty','because','become','bed','bedroom','bee','beef','beer','before','beg','begin','beginning','behave','behaviour','behind','being','belief','believe','bell','belong','below','belt','bend','benefit','bent','best','bet','better','between','beyond','bicycle','big','bike','bill','billion','bin','biology','bird','birth','birthday','biscuit','bit','bite','bitter','black','blame','blank','blind','block','blog','blonde','blood','blow','blue','board','boat','body','boil','bomb','bond','bone','book','boot','border','bored','boring','born','borrow','boss','both','bother','bottle','bottom','bowl','box','boy','boyfriend','brain','branch','brand','brave','bread','break','breakfast','breast','breath','breathe','breathing','bride','bridge','brief','bright','brilliant','bring','broad','broadcast','broken','brother','brown','brush','bubble','budget','build','building','bullet','bunch','burn','bury','bus','bush','business','businessman','busy','but','butter','button','buy','bye','cable','cafe','cake','calculate','call','calm','camera','camp','campaign','camping','campus','can','cancel','cancer','candidate','cannot','cap','capable','capacity','capital','captain','capture','car','card','care','career','careful','carefully','careless','carpet','carrot','carry','cartoon','case','cash','cast','castle','cat','catch','category','cause','cd','ceiling','celebrate','celebration','celebrity','cell','cent','central','centre','century','ceremony','certain','certainly','chain','chair','chairman','challenge','champion','chance','change','channel','chapter','character','characteristic','charge','charity','chart','chat','cheap','cheat','check','cheerful','cheese','chef','chemical','chemistry','chest','chicken','chief','child','childhood','chip','chocolate','choice','choose','church','cigarette','cinema','circle','circumstance','cite','citizen','city','civil','claim','class','classic','classical','classroom','clause','clean','clear','clearly','clever','click','client','climate','climb','clock','close','closed','closely','cloth','clothes','clothing','cloud','club','clue','coach','coal','coast','coat','code','coffee','coin','cold','collapse','colleague','collect','collection','college','colour','coloured','column','combination','combine','come','comedy','comfort','comfortable','command','comment','commercial','commission','commit','commitment','committee','common','commonly','communicate','communication','community','company','compare','comparison','compete','competition','competitive','competitor','complain','complaint','complete','completely','complex','complicated','component','computer','concentrate','concentration','concept','concern','concerned','concert','conclude','conclusion','condition','conduct','conference','confidence','confident','confirm','conflict','confuse','confused','confusing','connect','connected','connection','conscious','consequence','conservative','consider','consideration','consist','consistent','constant','constantly','construct','construction','consume','consumer','contact','contain','container','contemporary','content','contest','context','continent','continue','continuous','contract','contrast','contribute','contribution','control','convenient','conversation','convert','convince','convinced','cook','cooker','cooking','cool','copy','core','corner','corporate','correct','correctly','cost','costume','cottage','cotton','could','council','count','country','countryside','county','couple','courage','course','court','cousin','cover','covered','cow','crash','crazy','cream','create','creation','creative','creature','credit','crew','crime','criminal','crisis','criterion','critic','critical','criticism','criticize','crop','cross','crowd','crowded','crucial','cruel','cry','cultural','culture','cup','cupboard','cure','curly','currency','current','currently','curtain','curve','curved','custom','customer','cut','cycle','dad','daily','damage','dance','dancer','dancing','danger','dangerous','dark','data','date','daughter','day','dead','deal','dear','death','debate','debt','decade','december','decent','decide','decision','declare','decline','decorate','decoration','decrease','deep','deeply','defeat','defence','defend','define','definite','definitely','definition','degree','delay','deliberate','deliberately','delicious','delight','delighted','delivery','demand','demonstrate','dentist','deny','department','departure','depend','depressed','depressing','depth','describe','description','desert','deserve','design','designer','desire','desk','desperate','despite','destroy','detail','detailed','detect','detective','determine','determined','develop','development','device','diagram','dialogue','diamond','diary','dictionary','die','diet','difference','different','differently','difficult','difficulty','dig','digital','dinner','direct','direction','directly','director','dirt','dirty','disadvantage','disagree','disappear','disappointed','disappointing','disaster','disc','discipline','discount','discover','discovery','discuss','discussion','disease','dish','dishonest','dislike','dismiss','display','distribute','distribution','district','divide','division','divorced','do','doctor','document','documentary','dog','dollar','domestic','dominate','donate','door','double','doubt','down','download','downstairs','downwards','dozen','draft','drag','drama','draw','drawing','dream','dress','dressed','drink','drive','driver','driving','drop','drug','drum','drunk','dry','due','during','dust','duty','dvd','each','ear','early','earn','earth','earthquake','easily','east','eastern','easy','eat','economic','economy','edge','edit','edition','editor','educate','educated','education','educational','effect','effective','effectively','effort','egg','eight','eighteen','eighty','either','elderly','elect','election','electric','electrical','electricity','electronic','elephant','eleven','else','elsewhere','email','embarrassed','embarrassing','emerge','emergency','emotion','emotional','emphasis','emphasize','employ','employee','employer','employment','empty','enable','encounter','encourage','end','ending','enemy','energy','engage','engaged','engine','engineer','engineering','enhance','enjoy','enormous','enough','enquiry','ensure','enter','entertain','entertainment','enthusiasm','enthusiastic','entire','entirely','entrance','entry','environment','environmental','episode','equal','equally','equipment','error','escape','especially','essay','essential','establish','estate','estimate','ethical','euro','evaluate','even','evening','event','eventually','ever','every','everybody','everyday','everyone','everything','everywhere','evidence','evil','exact','exactly','exam','examination','examine','example','excellent','except','exchange','excited','excitement','exciting','excuse','executive','exercise','exhibition','exist','existence','expand','expect','expectation','expected','expense','expensive','experience','experienced','experiment','expert','explain','explanation','explode','exploration','explore','explosion','export','expose','express','expression','extend','extent','external','extra','extraordinary','extreme','extremely','eye','face','facility','fact','factor','factory','fail','failure','fair','fairly','faith','fall','false','familiar','family','famous','fan','fancy','fantastic','far','farm','farmer','farming','fascinating','fashion','fashionable','fast','fasten','fat','father','fault','favour','favourite','fear','feather','feature','february','feed','feedback','feel','feeling','fellow','female','fence','festival','few','fiction','field','fifteen','fifth','fifty','fight','fighting','figure','file','fill','film','final','finally','finance','financial','find','finding','fine','finger','finish','fire','firm','first','firstly','fish','fishing','fit','fitness','five','fix','fixed','flag','flame','flash','flat','flexible','flight','float','flood','floor','flour','flow','flower','flu','fly','flying','focus','fold','folding','folk','follow','following','food','foot','football','for','force','foreign','forest','forever','forget','forgive','fork','form','formal','former','fortunately','fortune','forty','forward','found','four','fourteen','fourth','frame','free','freedom','freeze','frequently','fresh','friday','fridge','friend','friendly','friendship','frighten','frightened','frightening','frog','from','front','frozen','fruit','fry','fuel','full','fully','fun','function','fund','fundamental','funding','funny','fur','furniture','further','furthermore','future','gain','gallery','game','gang','gap','garage','garden','gas','gate','gather','general','generally','generate','generation','generous','gentle','gentleman','geography','get','ghost','giant','gift','girl','girlfriend','give','glad','glass','global','glove','go','goal','god','gold','golf','good','goodbye','goods','govern','government','grab','grade','gradually','graduate','grain','grand','grandfather','grandmother','grandparent','grant','grass','grateful','great','green','greet','grey','ground','group','grow','growth','guarantee','guard','guess','guest','guide','guilty','guitar','gun','guy','gym','habit','hair','half','hall','hand','handle','hang','happen','happiness','happy','hard','hardly','harm','harmful','hat','hate','have','he','head','headache','headline','health','healthy','hear','hearing','heart','heat','heating','heaven','heavily','heavy','heel','height','helicopter','hell','hello','help','helpful','her','here','hero','hers','herself','hesitate','hey','hi','hide','high','highlight','highly','hill','him','himself','hire','his','historic','historical','history','hit','hobby','hockey','hold','hole','holiday','hollow','holy','home','homework','honest','honour','hope','horrible','horror','horse','hospital','host','hot','hotel','hour','house','household','housing','how','however','huge','human','humorous','humour','hundred','hungry','hunt','hunting','hurricane','hurry','hurt','husband','i','ice','idea','ideal','identify','identity','if','ignore','ill','illegal','illness','illustrate','illustration','image','imaginary','imagination','imagine','immediate','immediately','immigrant','impact','impatient','imply','import','importance','important','impose','impossible','impress','impressed','impression','impressive','improve','improvement','in','inch','incident','include','included','including','income','increase','increasingly','incredible','incredibly','indeed','independent','indicate','indirect','individual','indoor','indoors','industrial','industry','infection','influence','inform','informal','information','ingredient','initial','initially','initiative','injure','injured','injury','inner','innocent','insect','inside','insight','insist','install','instance','instead','institute','institution','instruction','instructor','instrument','insurance','intelligence','intelligent','intend','intended','intense','intention','interest','interested','interesting','internal','international','internet','interpret','interrupt','interview','into','introduce','introduction','invent','invention','invest','investigate','investigation','investment','invitation','invite','involve','involved','iron','island','issue','it','item','its','itself','jacket','jam','january','jazz','jeans','jewellery','job','join','joke','journal','journalist','journey','joy','judge','judgement','juice','july','jump','june','junior','just','justice','justify','keen','keep','key','keyboard','kick','kid','kill','killing','kilometre','kind','king','kiss','kitchen','knee','knife','knock','know','knowledge','lab','label','laboratory','labour','lack','lady','lake','lamp','land','landscape','language','laptop','large','largely','last','late','later','latest','laugh','laughter','launch','law','lawyer','lay','layer','lazy','lead','leader','leadership','leading','leaf','league','lean','learn','learning','least','leather','leave','lecture','left','leg','legal','leisure','lemon','lend','length','less','lesson','let','letter','level','library','licence','lie','life','lifestyle','lift','light','like','likely','limit','line','link','lion','lip','liquid','list','listen','listener','literature','little','live','lively','living','load','loan','local','locate','located','location','lock','logical','lonely','long','look','loose','lord','lorry','lose','loss','lost','lot','loud','loudly','love','lovely','low','lower','luck','lucky','lunch','lung','luxury','machine','mad','magazine','magic','mail','main','mainly','maintain','major','majority','make','male','mall','man','manage','management','manager','manner','many','map','march','mark','market','marketing','marriage','married','marry','mass','massive','master','match','matching','material','mathematics','maths','matter','maximum','may','maybe','me','meal','mean','meaning','means','meanwhile','measure','measurement','meat','media','medical','medicine','medium','meet','meeting','melt','member','memory','mental','mention','menu','mess','message','metal','method','metre','middle','midnight','might','mild','mile','military','milk','million','mind','mine','mineral','minimum','minister','minor','minority','minute','mirror','miss','missing','mission','mistake','mix','mixed','mixture','mobile','model','modern','modify','moment','monday','money','monitor','monkey','month','mood','moon','moral','more','morning','most','mostly','mother','motor','motorcycle','mount','mountain','mouse','mouth','move','movement','movie','much','mud','multiple','multiply','mum','murder','muscle','museum','music','musical','musician','must','my','myself','mysterious','mystery','nail','name','narrative','narrow','nation','national','native','natural','naturally','nature','navy','near','nearly','neat','necessarily','necessary','neck','need','needle','negative','neighbour','neighbourhood','neither','nerve','nervous','net','network','never','nevertheless','new','news','newspaper','next','nice','night','nightmare','nine','nineteen','ninety','no','nobody','noise','noisy','none','nor','normal','normally','north','northern','nose','not','note','nothing','notice','notion','novel','november','now','nowhere','nuclear','number','numerous','nurse','nut','obey','object','objective','obligation','observation','observe','obtain','obvious','obviously','occasion','occasionally','occur','ocean','o\'clock','october','odd','of','off','offence','offend','offensive','offer','office','officer','official','often','oh','oil','ok','old','old-fashioned','on','once','one','onion','online','only','onto','open','opening','operate','operation','opinion','opponent','opportunity','oppose','opposed','opposition','opposite','option','or','orange','order','ordinary','organ','organization','organize','organized','organizer','origin','original','originally','other','otherwise','ought','our','ours','ourselves','out','outcome','outdoor','outdoors','outer','outline','outside','oven','over','overall','owe','own','owner','pace','pack','package','page','pain','painful','paint','painter','painting','pair','palace','pale','pan','panel','pants','paper','paragraph','parent','park','parking','parliament','part','participate','particular','particularly','partly','partner','party','pass','passage','passenger','passion','passport','past','path','patient','pattern','pause','pay','payment','peace','peaceful','pen','pencil','penny','people','pepper','per','percentage','perfect','perfectly','perform','performance','perhaps','period','permanent','permission','permit','person','personal','personality','personally','perspective','persuade','pet','petrol','phase','philosophy','phone','photo','photograph','photographer','photography','phrase','physical','physics','piano','pick','picture','piece','pig','pile','pilot','pin','pink','pipe','pitch','place','plain','plan','plane','planet','planning','plant','plastic','plate','platform','play','player','pleasant','please','pleased','pleasure','plenty','plot','plus','pocket','poem','poet','poetry','point','pointed','poison','poisonous','police','policeman','policy','polite','political','politician','politics','pollution','pool','poor','pop','popular','popularity','population','port','portrait','pose','position','positive','possess','possession','possibility','possible','possibly','post','poster','pot','potato','potential','pound','pour','poverty','powder','power','powerful','practical','practice','practise','praise','pray','prayer','predict','prediction','prefer','pregnant','preparation','prepare','prepared','presence','present','presentation','preserve','president','press','pressure','pretend','pretty','prevent','previous','previously','price','priest','primary','prince','princess','principle','print','printer','printing','priority','prison','prisoner','privacy','private','prize','probably','problem','procedure','process','produce','producer','product','production','profession','professional','professor','profile','profit','program','programme','progress','project','promote','pronounce','proof','proper','properly','property','proposal','propose','prospect','protect','protection','protest','proud','prove','provide','psychologist','psychology','pub','public','publication','pull','punish','punishment','pupil','purchase','pure','purple','purpose','pursue','push','put','qualification','qualified','qualify','quality','quantity','quarter','queen','question','queue','quick','quickly','quiet','quietly','quit','quite','quote','quotation','race','racing','radio','railway','rain','raise','rank','rapid','rapidly','rare','rarely','rate','rather','raw','reach','react','reaction','read','reader','reading','ready','real','realistic','reality','realize','really','reason','reasonable','recall','receipt','receive','recent','recently','reception','recipe','recognize','recommend','recommendation','record','recording','recover','recycle','red','reduce','reduction','refer','reference','reflect','refuse','regard','region','regional','register','regret','regular','regularly','regulation','reject','relate','related','relation','relationship','relative','relatively','relax','relaxed','relaxing','release','relevant','relief','religion','religious','rely','remain','remark','remember','remind','remote','remove','rent','repair','repeat','repeated','replace','reply','report','reporter','represent','representative','reputation','request','require','requirement','rescue','research','researcher','reservation','reserve','resident','resist','resolve','resort','resource','respect','respond','response','responsibility','responsible','rest','restaurant','result','retain','retire','retired','return','reveal','review','revise','revolution','reward','rhythm','rice','rich','rid','ride','right','ring','rise','risk','river','road','robot','rock','role','roll','romantic','roof','room','root','rope','rough','round','route','routine','row','royal','rub','rubber','rubbish','rude','rugby','rule','run','runner','running','rural','rush','sad','sadly','safe','safety','sail','sailing','sailor','salad','salary','sale','salt','same','sample','sand','sandwich','satellite','satisfied','satisfy','saturday','sauce','save','saving','say','scale','scan','scared','scary','scene','schedule','scheme','school','science','scientific','scientist','score','scream','screen','script','sculpture','sea','search','season','seat','second','secondary','secondly','secret','secretary','section','sector','secure','security','see','seed','seek','seem','select','selection','self','sell','send','senior','sense','sensible','sensitive','sentence','separate','september','sequence','series','serious','seriously','servant','serve','service','session','set','settle','seven','seventeen','seventy','several','severe','sex','sexual','shade','shadow','shake','shall','shallow','shame','shape','share','sharp','she','sheep','sheet','shelf','shell','shelter','shift','shine','shiny','ship','shirt','shock','shocked','shoe','shoot','shooting','shop','shopping','short','shot','should','shoulder','shout','show','shower','shut','shy','sick','side','sight','sign','signal','silence','silent','silk','silly','silver','similar','similarity','similarly','simple','simply','since','sincere','sing','singer','singing','single','sink','sir','sister','sit','site','situation','six','sixteen','sixty','size','ski','skiing','skill','skin','skirt','sky','slave','sleep','slice','slide','slight','slightly','slip','slope','slow','slowly','small','smart','smell','smile','smoke','smoking','smooth','snake','snow','so','soap','soccer','social','society','sock','soft','software','soil','solar','soldier','solid','solution','solve','some','somebody','someone','something','sometimes','somewhat','somewhere','son','song','soon','sorry','sort','soul','sound','soup','source','south','southern','space','speak','speaker','special','specialist','specific','specifically','speech','speed','spell','spelling','spend','spending','spicy','spider','spirit','spiritual','split','spoken','sponsor','spoon','sport','spot','spread','spring','square','stable','stadium','staff','stage','stair','stamp','stand','standard','star','stare','start','state','statement','station','statistic','statue','status','stay','steady','steal','steel','steep','step','stick','sticky','stiff','still','stock','stomach','stone','stop','store','storm','story','straight','strange','stranger','strategy','stream','street','strength','stress','stretch','strict','strike','string','strong','strongly','structure','struggle','student','studio','study','stuff','stupid','style','subject','submit','substance','succeed','success','successful','successfully','such','sudden','suddenly','suffer','sugar','suggest','suggestion','suit','suitable','sum','summarize','summary','summer','sun','sunday','supermarket','supply','support','supporter','suppose','sure','surely','surface','surgery','surprise','surprised','surprising','surround','surrounding','survey','survive','suspect','swear','sweater','sweep','sweet','swim','swimming','switch','symbol','sympathy','symptom','system','table','tablet','tail','take','tale','talent','talented','talk','tall','tank','tape','target','task','taste','tax','taxi','tea','teach','teacher','teaching','team','tear','technical','technique','technology','teenage','teenager','telephone','television','tell','temperature','temporary','ten','tend','tennis','tent','term','terrible','test','text','than','thank','thanks','that','the','theatre','their','theirs','them','theme','themselves','then','theory','there','therefore','therapy','these','they','thick','thief','thin','thing','think','thinking','third','thirsty','thirteen','thirty','this','those','though','thought','thousand','threat','threaten','three','throat','through','throughout','throw','thursday','thus','ticket','tidy','tie','tight','till','time','tin','tiny','tip','tired','title','to','today','toe','together','toilet','tomato','tomorrow','tone','tongue','tonight','too','tool','tooth','top','topic','total','totally','touch','tough','tour','tourism','tourist','towards','towel','tower','toy','track','trade','tradition','traditional','traffic','train','trainer','training','transfer','translate','translation','transport','travel','traveller','treat','treatment','tree','trend','trial','trick','trip','tropical','trouble','trousers','truck','true','truly','trust','truth','try','t-shirt','tube','tuesday','tune','tunnel','turn','tv','twelve','twenty','twice','twin','type','typical','typically','tyre','ugly','ultimately','umbrella','unable','uncomfortable','unconscious','under','underground','underwear','understand','understanding','unemployed','unemployment','unexpected','unfair','unfortunately','unhappy','uniform','union','unique','unit','united','universe','university','unknown','unless','unlike','unlikely','unnecessary','unpleasant','until','unusual','up','update','upon','upper','upset','upstairs','upwards','urban','urge','us','use','used','useful','user','usual','usually','vacation','valley','valuable','value','van','variety','various','vary','vast','vegetable','vehicle','venue','version','very','via','victim','victory','video','view','viewer','village','violence','violent','virtual','virus','vision','visit','visitor','visual','vital','vitamin','voice','volume','volunteer','vote','wage','wait','waiter','wake','walk','wall','want','war','warm','warn','warning','wash','washing','waste','watch','water','wave','way','we','weak','weakness','wealth','wealthy','weapon','wear','weather','web','website','wedding','wednesday','week','weekend','weigh','weight','welcome','well','west','western','wet','what','whatever','wheel','when','whenever','where','whereas','wherever','whether','which','while','whisper','white','who','whole','whom','whose','why','wide','widely','wife','wild','wildlife','will','willing','win','wind','window','wine','wing','winner','winter','wire','wise','wish','with','within','without','witness','woman','wonder','wonderful','wood','wooden','wool','word','work','worker','working','worldwide','worried','worry','worse','worst','worth','would','wound','wow','wrap','write','writer','writing','written','wrong','yard','yeah','year','yellow','yes','yesterday','yet','you','young','your','yours','yourself','youth','zero','zone'];
+        const customWordList = ['hate','treated','pounds','sit','right','coffee','married','tricks','passion','pleasure','secret','mediators','keep','put','shoes','place','feel','turn','part','effects','observe','least','let','down','top','addition','far','willing','stand','order','first','side','person','longer','roll','compliant','deal','subject','later','give','rough','idea','stop','likely','how','things','going','with','due','respect','live','without','get','over','see','each','other','object','addressed','conditions','alignment','between','highlights','importance','catch','up','lost','take','together','facial','appearance','might','want','should','have','would','could','never','make','sure','had','better','can’t','help','able','gotta','got','gonna','going','wanna','even','took','been','if','as','wouldn’t','mind','won’t','there’ll','seems','of','to','by','on','for','summarize','summary','rising','graduated','soon','subsequently','effect','perceptions','used','economical','dare','glare','unfamiliar','inequality','equality','emancipation','concerns','whether','immersive','contributed','dependent','measure','defeats','intergroup','bias','intra','interdependent','mediator','discriminate','regret','pollutants','desert','maintenance','affordably','maneuver','behaves','companion','rucksack','stitching','cordially','reunion','existing','purchase','frequent','shopper','spacious','pleasantly','instructions','quite','impressive','workload','anticipating','arrangement','facilities','venue','enthusiasm','enthralled','grant','resident','charity','choir','invoice','involve','mayor','city','council','honor','federal','exceed','note','impose','acquiring','exhibit','transfer','require','immense','vehicle','beverage','draft','urgent','bother','supply','patience','patient','crisis','attendee','renowned','stretch','confidential','prerequisite','qualified','confident','exclusive','specialize','detour','embassy','earning','shipment','flat','tire','spare','relief','plenty','firm','distributed','inspection','regarding','stir','chop','appreciate','fuel','tidy','elaborate','somewhat','prevent','prevalent','encourage','courage','vigorous','arousal','coping','regardless','resistance','withdrawal','depress','anti','sympathy','ship','hood','ery','ory','ry','uni','fic','fect','fact','tion','ef','ex','or','ish','like','ful','less','ad','in','com','enhanced','rather','exhaustion','exhaustive','haur','haust','holistic','victim','morality','evaluation','assess','appraising','assessing','severity','varying','degree','typically','dominant','reflect','vast','briefly','represent','familliarity','prejudice','argue','estimated','guess','assume','infer','distinct','associated','associations','radical','engage','solidarity','transgressions','nonradical','expected','except','expert','expire','posit','reluctant','postpone','tend','tendency','inclination','intense','intention','intend','further','promote','reduce','despite','determine','acknowledged','identify','inform','notice','find','demanding','demonstrated','examines','delicated','dedicated','committed','devoted','contribute','call','prosocial','genuine','whereas','comparably','opposite','against','contrary','consequently','consequences','subsequent','result','contrast','aspect','separate','predictions','estimation','predicts','explore','extend','extent','expand','examine','seek','consider','deem','consistency','consistent','conduct','concluded','contrituted','constructs','consisting','comprises','constant','constraint','due','now','that','gain','obtain','acquire','largely','adopted','thus','though','thought','through','throughout','thorough','although','novel','implications','comprehensive','integrating','earn','expertise','prior','submission','commit','prefer','refer','reveals','proceed','revealed','relevant','emerge','indicate','indicator','occurs','assert','emphasize','offer','affect','impact','effort','force','insecure','sufficiently','satisfy','significant','substantially','considerable','suffer','since','adjust','advise','advice','ensure','relative','relatively','moderator','modest','whoever','whatever','nevertheless','moreover','vouch','locate','comment','commant','current','vital','remind','among','amount','mainly','depends','above','certain','evident','plain','explicit','ask','maintain','remain','worth','worse','appear','appropriately','appropriate','manipulated','wonder','proposition','purpose','pursue','forming','negligible','conceptualizing','release','least','leave','warn','let','led','invest','investment','investigation','rotate','profit','faith','instead','inspire','admit','thesis','fear','prohibition','revision','suggest','induced','readily','subjective','objective','correlation','causally','satisfying','implicit','otherwise','density','elicits','concrete','opportunities','preferably','ones','prescriptive','superficial','assessment','predation','detract','empirical','results','inability','straightforward','nigh','edifice','nhst','subtle','signs','decay','practical','prone','comes','play','alternatives','repeatedly','critiqued','warrants','rejection','consequently','account','may','help','explain','breaking','away','dominant','group','value','practitioners','count','trials','tribulations','collectively','known','confidence','provided','below','intervals','share','fate','sense','convincingly','addressed','offspring','criterion','criteria','critical','thinking','condition','moment','accounts','for','plausible','deferment','concurrent','synthesis','assertion','using','utilize','proxy','administer','questionable','reliance','adverse','yielded','utility','orthogonal','unique','variance','over','accounted','meta-analytic','construct','redundancy','validity','is','of','concern','high','correlations','are','indeed','legitimate','means','underlying','rarely','questionnaire','following','core','template','based','countdown','possible','worthwhile','research','topic','such','timely','efficient','manner','pitch','proposal','potential','mentor','time','poor','meeting','daunting','challenge','outlining','discussing','pursuing','hardest','thing','doing','starting','poverty','affluence','advance','serve','tangible','deprivation','arises','material','conversely','possibly','through','aversion','asymmetry','indicator','willing','measures','measurement','utilizing','belong','inquiry','impairs','impart','contradicts','compelling','lion','share','exposure','claims'];
+        
+        // --- DOM Elements & State ---
+        const allElements = {
+            mainMenuScreen: document.getElementById('main-menu-screen'),
+            setupScreen: document.getElementById('setup-screen'),
+            vocabQuizScreen: document.getElementById('vocab-quiz-screen'),
+            readingTrainerScreen: document.getElementById('reading-trainer-screen'),
+            resultsScreen: document.getElementById('results-screen'),
+            setupTitle: document.getElementById('setup-title'),
+            wordListTextarea: document.getElementById('word-list'),
+            wordCountMsg: document.getElementById('word-count-msg'),
+            numQuestionsSelect: document.getElementById('num-questions'),
+            startBtn: document.getElementById('start-btn'),
+            loadingContainer: document.getElementById('loading-container'),
+            loadingMessage: document.getElementById('loading-message'),
+            // Vocab Quiz
+            vocabScoreEl: document.getElementById('vocab-score'),
+            vocabCurrentQEl: document.getElementById('vocab-current-q'),
+            vocabTotalQEl: document.getElementById('vocab-total-q'),
+            vocabQuestionWordEl: document.getElementById('vocab-question-word'),
+            vocabAnswerOptionsEl: document.getElementById('vocab-answer-options'),
+            vocabFeedbackContainer: document.getElementById('vocab-feedback-container'),
+            vocabFeedbackHeader: document.getElementById('vocab-feedback-header'),
+            vocabFeedbackAnalysis: document.getElementById('vocab-feedback-analysis'),
+            vocabFeedbackDistractors: document.getElementById('vocab-feedback-distractors'),
+            vocabFeedbackExamples: document.getElementById('vocab-feedback-examples'),
+            vocabNextBtn: document.getElementById('vocab-next-btn'),
+            // Reading Trainer
+            readingScoreEl: document.getElementById('reading-score'),
+            readingCurrentQEl: document.getElementById('reading-current-q'),
+            readingTotalQEl: document.getElementById('reading-total-q'),
+            readingInstructionEl: document.getElementById('reading-instruction'),
+            readingSentenceEl: document.getElementById('reading-sentence'),
+            readingAnswerOptionsEl: document.getElementById('reading-answer-options'),
+            askAiBtn: document.getElementById('ask-ai-btn'),
+            readingFeedbackContainer: document.getElementById('reading-feedback-container'),
+            readingFeedbackHeader: document.getElementById('reading-feedback-header'),
+            readingFeedbackTranslation: document.getElementById('reading-feedback-translation'),
+            readingFeedbackAnalysis: document.getElementById('reading-feedback-analysis'),
+            readingNextBtn: document.getElementById('reading-next-btn'),
+            // Results
+            finalScoreEl: document.getElementById('final-score'),
+            wrongAnswersListEl: document.getElementById('wrong-answers-list'),
+            restartBtn: document.getElementById('restart-btn'),
+            // Q&A Modal
+            qaModal: document.getElementById('qa-modal'),
+            qaOriginalSentence: document.getElementById('qa-original-sentence'),
+            qaInput: document.getElementById('qa-input'),
+            qaLoading: document.getElementById('qa-loading'),
+            qaResponse: document.getElementById('qa-response'),
+            qaCloseBtn: document.getElementById('qa-close-btn'),
+            qaSubmitBtn: document.getElementById('qa-submit-btn'),
+        };
+
+        let state = {
+            currentMode: null,
+            allWords: [],
+            quizData: [],
+            currentQuestionIndex: 0,
+            score: 0,
+            wrongAnswers: [],
+        };
+        
+        // --- Utility Functions ---
+        const getPureWordsFromText = (text) => text ? [...new Set(text.toLowerCase().match(/[a-zA-Z]{3,}/g) || [])] : [];
+        const shuffleArray = (array) => { for (let i = array.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [array[i], array[j]] = [array[j], array[i]]; } return array; };
+        
+        const showScreen = (screenId) => {
+            ['main-menu-screen', 'setup-screen', 'vocab-quiz-screen', 'reading-trainer-screen', 'results-screen'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+        };
+
+        // --- Gemini API Calls ---
+        const callGemini = async (prompt, isJson = true) => {
+            const generationConfig = isJson ? { "responseMimeType": "application/json", "temperature": 0.6 } : { "temperature": 0.4 };
+            const payload = { contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig };
+            const apiKey = "AIzaSyDJ44NNeUBB_jHa8w5dErfvhWrwDsygWRE";
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+            try {
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                const result = await response.json();
+                const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (responseText) {
+                    return isJson ? JSON.parse(responseText) : responseText;
+                } else { throw new Error("Invalid response structure from API"); }
+            } catch (error) { console.error("Gemini API call failed:", error); return null; }
+        };
+
+        // --- Quiz Generation Logic ---
+        const generateVocabQuizQuestion = async (word, allWords) => {
+            const getDistractors = (currentWord) => {
+                const distractors = new Set();
+                while (distractors.size < 3) {
+                    const randomWord = allWords[Math.floor(Math.random() * allWords.length)];
+                    if (randomWord !== currentWord) distractors.add(randomWord);
+                }
+                return Array.from(distractors);
+            }
+            const distractors = getDistractors(word);
+            const prompt = `You are a vocabulary quiz creator for a Korean student. For the target word "${word}" and three distractor words ${JSON.stringify(distractors)}, return a JSON object with these keys:
+            1.  "target_word": The string "${word}".
+            2.  "correct_definition": A concise Korean definition for "${word}".
+            3.  "distractor_definitions": An object where keys are the distractor words and values are their concise Korean definitions.
+            4.  "analysis": A short analysis of the correct word, including its part of speech (품사) and core nuance.
+            5.  "examples": An array of 3 example sentences using the target word, each with a Korean translation.`;
+            return await callGemini(prompt);
+        };
+
+        const generateReadingQuizQuestion = async (word) => {
+            const prompt = `You are an expert tutor for a graduate student reading social psychology papers. Create a challenging multiple-choice question to test structural understanding of an academic sentence, based on the word "${word}".
+
+            Return ONLY a JSON object with these exact keys:
+            1. "original_sentence": A moderately complex academic sentence relevant to social psychology using "${word}".
+            2. "quiz_question": A Korean question about the sentence's structure or logical flow (e.g., "이 문장의 주어는 무엇인가?", "although절이 의미하는 바는?").
+            3. "correct_answer": The correct Korean answer to the "quiz_question".
+            4. "distractors": An array of 3 plausible but incorrect Korean answers.
+            5. "sentence_translation": A professional Korean translation of the "original_sentence".
+            6. "grammar_analysis": A detailed grammatical analysis in Korean. Start with '📌 핵심 단어: ${word} (품사) - [뜻]'. Then, break down the sentence into its components (S, V, O, clauses, phrases) and explain their roles and logical connections. Use newlines (\\n) for readability.
+
+            Example for "liability":
+            {
+              "original_sentence": "Although stress is typically considered a liability, more stress-reactive individuals may be more motivated to improve.",
+              "quiz_question": "이 문장에서 'Although'가 이끄는 절이 전달하는 핵심 의미는 무엇입니까?",
+              "correct_answer": "스트레스가 일반적으로 단점으로 여겨진다는 통념",
+              "distractors": [
+                "스트레스가 개인을 더 동기 부여한다는 사실",
+                "스트레스 반응성이 높은 개인들의 특징",
+                "개선을 위해 스트레스가 필수적이라는 점"
+              ],
+              "sentence_translation": "비록 스트레스가 일반적으로 불리한 점으로 여겨지지만, 스트레스에 더 민감하게 반응하는 개인들은 개선하려는 동기가 더 강할 수 있다.",
+              "grammar_analysis": "📌 핵심 단어: liability (명사) - 불리한 점, 단점, 책임.\\n\\n1.  **핵심 뼈대 (Main Clause):**\\n    • 주어(S): more stress-reactive individuals\\n    • 동사(V): may be\\n    • 보어(C): more motivated to improve\\n\\n2.  **구조 분석:**\\n    • **Although stress is typically considered a liability:** '비록 ~이지만'이라는 의미의 양보를 나타내는 부사절입니다. 주절의 내용과 대조되는 통념이나 배경을 설명합니다.\\n    • **more stress-reactive individuals may be more motivated to improve:** 문장의 핵심 내용을 담고 있는 주절입니다. 'Although'절의 내용과 반대되는 새로운 가능성을 제시합니다."
+            }`;
+            return await callGemini(prompt);
+        };
+        
+        // --- Main App Flow ---
+        const startTraining = async () => {
+            allElements.loadingContainer.classList.remove('hidden'); allElements.loadingContainer.classList.add('flex');
+            allElements.startBtn.disabled = true;
+
+            const numQuestions = parseInt(allElements.numQuestionsSelect.value, 10);
+            const selectedWords = shuffleArray([...state.allWords]).slice(0, numQuestions);
+            state.quizData = [];
+
+            if (state.currentMode === 'vocab') {
+                allElements.loadingMessage.textContent = 'AI가 단어 퀴즈를 만들고 있습니다...';
+                for (let i = 0; i < selectedWords.length; i++) {
+                    const word = selectedWords[i];
+                    const questionData = await generateVocabQuizQuestion(word, state.allWords);
+                    if (questionData) state.quizData.push(questionData);
+                }
+            } else if (state.currentMode === 'reading') {
+                allElements.loadingMessage.textContent = 'AI가 JPSP급 난이도의 분석용 문장을 생성하고 있습니다...';
+                for (let i = 0; i < selectedWords.length; i++) {
+                    const word = selectedWords[i];
+                    const questionData = await generateReadingQuizQuestion(word);
+                    if (questionData) state.quizData.push(questionData);
+                }
+            }
+
+            allElements.loadingContainer.classList.add('hidden');
+            allElements.startBtn.disabled = false;
+            
+            if (state.quizData.length > 0) {
+                state.currentQuestionIndex = 0;
+                state.score = 0;
+                state.wrongAnswers = [];
+                if (state.currentMode === 'vocab') {
+                    showScreen('vocab-quiz-screen');
+                    displayVocabQuestion();
+                } else {
+                    showScreen('reading-trainer-screen');
+                    displayReadingQuestion();
+                }
+            } else {
+                alert("퀴즈 생성에 실패했습니다. 단어 목록을 확인하거나 잠시 후 다시 시도해주세요.");
+            }
+        };
+
+        // --- Vocab Quiz Display & Logic ---
+        const displayVocabQuestion = () => {
+            allElements.vocabFeedbackContainer.classList.add('hidden');
+            allElements.vocabNextBtn.classList.add('hidden');
+            const q = state.quizData[state.currentQuestionIndex];
+            if (!q) return;
+
+            allElements.vocabScoreEl.textContent = state.score;
+            allElements.vocabCurrentQEl.textContent = state.currentQuestionIndex + 1;
+            allElements.vocabTotalQEl.textContent = state.quizData.length;
+            allElements.vocabQuestionWordEl.textContent = q.target_word;
+            
+            const options = shuffleArray([q.correct_definition, ...Object.values(q.distractor_definitions)]);
+            allElements.vocabAnswerOptionsEl.innerHTML = '';
+            options.forEach(option => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.classList.add('quiz-option-btn', 'w-full', 'p-4', 'bg-white', 'border-2', 'border-gray-300', 'rounded-lg', 'font-semibold', 'shadow-sm');
+                button.onclick = () => handleVocabAnswer(option, button);
+                allElements.vocabAnswerOptionsEl.appendChild(button);
+            });
+        };
+
+        const handleVocabAnswer = (selectedOption, buttonEl) => {
+            const q = state.quizData[state.currentQuestionIndex];
+            const isCorrect = selectedOption === q.correct_definition;
+
+            Array.from(allElements.vocabAnswerOptionsEl.children).forEach(btn => {
+                btn.disabled = true;
+                if (btn.textContent === q.correct_definition) btn.classList.add('correct');
+            });
+
+            if (isCorrect) {
+                state.score++;
+                allElements.vocabFeedbackHeader.textContent = '정답입니다!';
+                allElements.vocabFeedbackHeader.className = 'p-3 rounded-lg text-white font-bold text-lg bg-green-500';
+            } else {
+                buttonEl.classList.add('incorrect');
+                allElements.vocabFeedbackHeader.textContent = '오답입니다!';
+                allElements.vocabFeedbackHeader.className = 'p-3 rounded-lg text-white font-bold text-lg bg-red-500';
+                state.wrongAnswers.push({ ...q, yourAnswer: selectedOption });
+            }
+            allElements.vocabScoreEl.textContent = state.score;
+
+            // Populate and show feedback
+            allElements.vocabFeedbackAnalysis.textContent = q.analysis;
+            allElements.vocabFeedbackDistractors.innerHTML = Object.entries(q.distractor_definitions).map(([word, def]) => `<p><strong class="font-semibold">${word}:</strong> ${def}</p>`).join('');
+            allElements.vocabFeedbackExamples.innerHTML = q.examples.map(ex => `<div class="border-l-2 border-sky-300 pl-2"><p>${ex.sentence}</p><p class="text-sm text-gray-500">${ex.translation}</p></div>`).join('');
+            allElements.vocabFeedbackContainer.classList.remove('hidden');
+            allElements.vocabNextBtn.classList.remove('hidden');
+        };
+
+        // --- Reading Trainer Display & Logic ---
+        const displayReadingQuestion = () => {
+            allElements.readingFeedbackContainer.classList.add('hidden');
+            allElements.readingNextBtn.classList.add('hidden');
+            const q = state.quizData[state.currentQuestionIndex];
+            if (!q) return;
+
+            allElements.readingScoreEl.textContent = state.score;
+            allElements.readingCurrentQEl.textContent = state.currentQuestionIndex + 1;
+            allElements.readingTotalQEl.textContent = state.quizData.length;
+            allElements.readingInstructionEl.textContent = q.quiz_question;
+            allElements.readingSentenceEl.textContent = q.original_sentence;
+
+            const options = shuffleArray([q.correct_answer, ...q.distractors]);
+            allElements.readingAnswerOptionsEl.innerHTML = '';
+            options.forEach(option => {
+                const button = document.createElement('button');
+                button.textContent = option;
+                button.classList.add('quiz-option-btn', 'w-full', 'p-4', 'bg-white', 'border-2', 'border-gray-300', 'rounded-lg', 'font-semibold', 'shadow-sm');
+                button.onclick = () => handleReadingAnswer(option, button);
+                allElements.readingAnswerOptionsEl.appendChild(button);
+            });
+        };
+
+        const handleReadingAnswer = (selectedOption, buttonEl) => {
+            const q = state.quizData[state.currentQuestionIndex];
+            const isCorrect = selectedOption === q.correct_answer;
+
+            Array.from(allElements.readingAnswerOptionsEl.children).forEach(btn => {
+                btn.disabled = true;
+                if (btn.textContent === q.correct_answer) btn.classList.add('correct');
+            });
+
+            if (isCorrect) {
+                state.score++;
+                allElements.readingFeedbackHeader.textContent = "정답입니다!";
+                allElements.readingFeedbackHeader.className = 'p-3 rounded-lg text-white font-bold text-lg bg-green-500';
+            } else {
+                buttonEl.classList.add('incorrect');
+                allElements.readingFeedbackHeader.textContent = "오답입니다.";
+                allElements.readingFeedbackHeader.className = 'p-3 rounded-lg text-white font-bold text-lg bg-red-500';
+                state.wrongAnswers.push({ ...q, yourAnswer: selectedOption });
+            }
+            
+            allElements.readingFeedbackTranslation.textContent = q.sentence_translation;
+            allElements.readingFeedbackAnalysis.textContent = q.grammar_analysis;
+
+            allElements.readingFeedbackContainer.classList.remove('hidden');
+            allElements.readingNextBtn.classList.remove('hidden');
+            allElements.readingScoreEl.textContent = state.score;
+        };
+
+        // --- Shared Logic (Results, Navigation) ---
+        const showResults = () => {
+            showScreen('results-screen');
+            allElements.finalScoreEl.textContent = `${state.score} / ${state.quizData.length}`;
+            
+            if(state.wrongAnswers.length === 0){
+                allElements.wrongAnswersListEl.innerHTML = '<p class="text-gray-500 text-center">틀린 문제가 없습니다. 완벽합니다!</p>';
+            } else if (state.currentMode === 'vocab') {
+                allElements.wrongAnswersListEl.innerHTML = state.wrongAnswers.map(item => 
+                    `<div class="mb-3 p-2 border-l-4 border-red-300">
+                        <p class="font-bold">${item.target_word}</p>
+                        <p><strong class="text-red-600">선택:</strong> ${item.yourAnswer}</p>
+                        <p><strong class="text-green-600">정답:</strong> ${item.correct_definition}</p>
+                     </div>`
+                ).join('');
+            } else if (state.currentMode === 'reading') {
+                allElements.wrongAnswersListEl.innerHTML = state.wrongAnswers.map(item => 
+                    `<div class="mb-4 p-3 border-l-4 border-red-300 bg-red-50 rounded-r-lg">
+                        <p class="text-gray-600 text-sm font-semibold">Q: ${item.original_sentence}</p>
+                        <p class="mt-2 text-sm"><strong class="text-red-600">나의 오답:</strong> ${item.yourAnswer}</p>
+                        <p class="text-sm"><strong class="text-green-600">정답:</strong> ${item.correct_answer}</p>
+                     </div>`
+                ).join('');
+            }
+        };
+        
+        const goToNextQuestion = () => {
+            state.currentQuestionIndex++;
+            if (state.currentQuestionIndex < state.quizData.length) {
+                if (state.currentMode === 'vocab') displayVocabQuestion();
+                else displayReadingQuestion();
+            } else {
+                showResults();
+            }
+        };
+
+        const updateWordCount = () => {
+            state.allWords = getPureWordsFromText(allElements.wordListTextarea.value);
+            const count = state.allWords.length;
+            allElements.wordCountMsg.textContent = count < 4 ? `고유 단어가 4개 이상 필요합니다. (현재 ${count}개)` : `총 ${count}개의 고유 단어가 인식되었습니다.`;
+            allElements.startBtn.disabled = count < 4;
+        };
+
+        // --- Event Listeners ---
+        document.querySelectorAll('.mode-select-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                state.currentMode = btn.dataset.mode;
+                if (state.currentMode === 'vocab') {
+                    allElements.setupTitle.textContent = '빠른 단어 뜻 퀴즈 설정';
+                } else {
+                    allElements.setupTitle.textContent = 'AI 논문 독해 트레이너 설정';
+                }
+                showScreen('setup-screen');
+            });
+        });
+
+        allElements.wordListTextarea.addEventListener('input', updateWordCount);
+        
+        allElements.startBtn.addEventListener('click', startTraining);
+        allElements.vocabNextBtn.addEventListener('click', goToNextQuestion);
+        allElements.readingNextBtn.addEventListener('click', goToNextQuestion);
+        allElements.restartBtn.addEventListener('click', () => showScreen('main-menu-screen'));
+        
+        allElements.askAiBtn.addEventListener('click', () => {
+            const q = state.quizData[state.currentQuestionIndex];
+            allElements.qaOriginalSentence.textContent = q.original_sentence;
+            allElements.qaInput.value = '';
+            allElements.qaResponse.classList.add('hidden');
+            allElements.qaModal.classList.remove('hidden');
+        });
+        allElements.qaCloseBtn.addEventListener('click', () => allElements.qaModal.classList.add('hidden'));
+        allElements.qaSubmitBtn.addEventListener('click', () => {
+            const currentQuestion = state.quizData[state.currentQuestionIndex];
+            const originalSentence = currentQuestion.original_sentence;
+            const userQuestion = allElements.qaInput.value;
+            
+            if (!userQuestion) return;
+
+            allElements.qaLoading.classList.remove('hidden');
+            allElements.qaResponse.classList.add('hidden');
+            allElements.qaSubmitBtn.disabled = true;
+
+            const prompt = `You are a helpful AI teaching assistant for a Korean student studying English for academic papers.
+            The student is currently working on the following English sentence: "${originalSentence}"
+            The student has the following question: "${userQuestion}"
+            Please answer the user's question clearly and concisely in Korean. Explain it as if you are a kind and knowledgeable tutor.
+            Return ONLY the plain text answer.`;
+
+            callGemini(prompt, false).then(answerText => {
+                allElements.qaResponse.textContent = answerText || "답변을 생성하는 데 실패했습니다.";
+                allElements.qaLoading.classList.add('hidden');
+                allElements.qaResponse.classList.remove('hidden');
+                allElements.qaSubmitBtn.disabled = false;
+            });
+        });
+        
+        // --- Initial Call ---
+        const uniqueCombinedWords = [...new Set([...oxford3000, ...customWordList])];
+        allElements.wordListTextarea.value = uniqueCombinedWords.join('\n');
+        updateWordCount();
+    </script>
+</body>
+</html>
