@@ -52,7 +52,6 @@
       <h1>토익 단어 퀴즈 — 단일 파일</h1>
       <div style="display:flex;gap:8px;flex-wrap:wrap">
         <button id="btn-word-test" class="btn" title="AI 통합 영어 학습 플랫폼으로 이동" onclick="window.location.href='word_test.html'">🧠 AI 학습</button>
-        <button id="btn-export-html" class="btn" title="이 페이지를 그대로 HTML 파일로 저장">📄 HTML 내보내기</button>
         <button id="btn-export-wrong" class="btn" title="오답 노트를 텍스트로 저장">📝 오답 노트</button>
       </div>
     </div>
@@ -191,7 +190,7 @@ const norm = __buildNormalizer();
       answer:$('#answer'),submit:$('#btn-submit'),reveal:$('#btn-reveal'),prev:$('#btn-prev'),next:$('#btn-next'),
       feedback:$('#feedback'),fbHead:$('#fb-head'),fbAnalysis:$('#fb-analysis'),fbExamples:$('#fb-examples'),
       final:$('#final'),wronglist:$('#wronglist'),restart:$('#btn-restart'),
-      exportWrong:$('#btn-export-wrong'),exportHtml:$('#btn-export-html')};
+      exportWrong:$('#btn-export-wrong')};
 
     const state={words:[],quiz:[],idx:0,score:0,wrongs:[],answers:[]};
 
@@ -211,7 +210,6 @@ const norm = __buildNormalizer();
     function renderResults(){els.final.textContent=`${state.score} / ${state.quiz.length}`;if(!state.wrongs.length){els.wronglist.innerHTML = '<div class="muted">틀린 문제가 없습니다. 완벽합니다!</div>';} else {els.wronglist.innerHTML = state.wrongs.map(w=>`<div class="wrongitem"><div><b>${w.word}</b> : ${w.meanings.join(', ')}</div><div class="muted" style="font-size:14px">입력: ${w.input}</div></div>`).join('');}}
     function downloadText(name, text){const blob=new Blob([text],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;a.click();URL.revokeObjectURL(url);}
     function exportWrong(){if(!state.wrongs.length){alert('오답이 없습니다.');return;}const lines=state.wrongs.map(w=>`${w.word} : ${w.meanings.join(', ')} (입력: ${w.input})`).join('\n');downloadText('toeic_wrong_notes.txt',lines);}
-    function exportHTML(){const html='<!DOCTYPE html>\n'+document.documentElement.outerHTML;const blob=new Blob([html],{type:'text/html;charset=utf-8'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='toeic_quiz_singlefile.html';a.click();URL.revokeObjectURL(url);}
     function __boot(msg){ try{ document.getElementById('boot').style.display='flex'; document.getElementById('boot-msg').textContent=msg; }catch(_){} }
 function __bootDone(){ try{ document.getElementById('boot').style.display='none'; }catch(_){} }
 window.addEventListener('error', (e)=>{ __boot('에러: '+ (e && e.message ? e.message : '알 수 없는 오류')); });
@@ -226,7 +224,7 @@ state.words=loadFixedDataset();els.infoCount.textContent=`현재 세트: ${state
       els.submit.addEventListener('click',submit);
       els.answer.addEventListener('keydown',(e)=>{ if(e.key==='Enter' && !els.submit.disabled) submit(); });
       els.next.addEventListener('click',next);els.prev.addEventListener('click',prev);els.reveal.addEventListener('click',reveal);
-      els.restart.addEventListener('click',()=>{ show('setup'); });els.exportWrong.addEventListener('click',exportWrong);els.exportHtml.addEventListener('click',exportHTML);}
+      els.restart.addEventListener('click',()=>{ show('setup'); });els.exportWrong.addEventListener('click',exportWrong);}
     window.addEventListener('DOMContentLoaded', init);
   </script>
 </body>
