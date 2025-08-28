@@ -1,0 +1,91 @@
+[
+  {
+    "id": 1,
+    "type": "cheonilmun",
+    "chapter": "Chapter 1",
+    "unit": "문장의 기본구조",
+    "en": "The book that I bought yesterday is very interesting.",
+    "ko": "내가 어제 산 그 책은 매우 흥미롭다.",
+    "answer": "interesting",
+    "analysis": {
+      "point": "관계대명사 that의 용법",
+      "explanation": "관계대명사 that은 앞의 명사(선행사) the book을 수식하는 관계절을 만듭니다. 'that I bought yesterday'는 the book을 설명하는 역할을 합니다.",
+      "vocab": {
+        "bought": "buy의 과거형, 사다",
+        "yesterday": "어제",
+        "interesting": "흥미로운, 재미있는"
+      }
+    }
+  },
+  {
+    "id": 2,
+    "type": "cheonilmun",
+    "chapter": "Chapter 1",
+    "unit": "주어와 동사의 일치",
+    "en": "Everyone in the class has finished their homework.",
+    "ko": "그 반의 모든 사람들이 숙제를 끝냈다.",
+    "answer": "has",
+    "analysis": {
+      "point": "부정대명사 everyone과 동사의 일치",
+      "explanation": "everyone은 단수 취급하므로 has를 사용합니다. 하지만 their와 같은 복수 대명사로 받을 수 있습니다.",
+      "vocab": {
+        "everyone": "모든 사람",
+        "finished": "끝내다, 완료하다",
+        "homework": "숙제"
+      }
+    }
+  },
+  {
+    "id": 3,
+    "type": "cheonilmun",
+    "chapter": "Chapter 2",
+    "unit": "시제의 이해",
+    "en": "By the time you arrive, I will have finished my work.",
+    "ko": "네가 도착할 때쯤, 나는 내 일을 끝내 놓을 것이다.",
+    "answer": "will have finished",
+    "analysis": {
+      "point": "미래완료시제의 용법",
+      "explanation": "by the time과 함께 쓰인 미래완료시제로, 미래의 어떤 시점까지 완료될 동작을 나타냅니다.",
+      "vocab": {
+        "arrive": "도착하다",
+        "finished": "끝내다, 완료하다"
+      }
+    }
+  },
+  {
+    "id": 4,
+    "type": "cheonilmun", 
+    "chapter": "Chapter 2",
+    "unit": "가정법과 조건절",
+    "en": "If I were you, I would study harder for the exam.",
+    "ko": "내가 너라면, 시험을 위해 더 열심히 공부할 텐데.",
+    "answer": "were",
+    "analysis": {
+      "point": "가정법 과거의 용법",
+      "explanation": "현재 사실과 반대되는 가정을 나타내는 가정법 과거입니다. if절에서는 were를, 주절에서는 would + 동사원형을 사용합니다.",
+      "vocab": {
+        "study": "공부하다",
+        "harder": "더 열심히",
+        "exam": "시험"
+      }
+    }
+  },
+  {
+    "id": 5,
+    "type": "cheonilmun",
+    "chapter": "Chapter 3",
+    "unit": "수동태의 활용",
+    "en": "The problem was solved by the team of experts.",
+    "ko": "그 문제는 전문가 팀에 의해 해결되었다.",
+    "answer": "was solved",
+    "analysis": {
+      "point": "과거 수동태의 형태",
+      "explanation": "과거 수동태는 was/were + 과거분사 형태로 만들어집니다. by를 사용해서 행위자를 나타낼 수 있습니다.",
+      "vocab": {
+        "problem": "문제",
+        "solved": "해결하다 (solve의 과거분사)",
+        "experts": "전문가들"
+      }
+    }
+  }
+]

@@ -100,6 +100,12 @@
             academic: []
         };
 
+        // --- 원본 학습 자료 (삭제 방지용) ---
+        const originalData = {
+            cheonilmun: [],
+            patterns: []
+        };
+
         // --- 앱 상태 관리 ---
         let sessionState = {
             queue: [],
@@ -129,8 +135,34 @@
         
         // --- 초기화 ---
         document.addEventListener('DOMContentLoaded', () => {
-            updateReviewCount();
+            loadOriginalData().then(() => {
+                updateReviewCount();
+            });
         });
+
+        // --- 원본 데이터 로딩 함수들 ---
+        async function loadOriginalData() {
+            try {
+                // 천일문 데이터 로드
+                const cheonilmunResponse = await fetch('./data/cheonilmun_sample.json');
+                if (cheonilmunResponse.ok) {
+                    const cheonilmunData = await cheonilmunResponse.json();
+                    originalData.cheonilmun = [...cheonilmunData];
+                    masterData.cheonilmun = [...cheonilmunData];
+                }
+
+                // 생활영어 패턴 데이터 로드
+                const patternsResponse = await fetch('./data/patterns_numbered.json');
+                if (patternsResponse.ok) {
+                    const patternsData = await patternsResponse.json();
+                    originalData.patterns = [...patternsData];
+                    masterData.patterns = [...patternsData];
+                }
+            } catch (error) {
+                console.error('원본 데이터 로드 실패:', error);
+                // 오류가 발생해도 앱이 계속 작동하도록 함
+            }
+        }
 
         function updateReviewCount() {
             const count = [...masterData.cheonilmun, ...masterData.patterns, ...masterData.academic].length;
@@ -455,9 +487,20 @@
                 
                 const filteredData = allData.filter(item => {
                     if (item.pattern) {
-                        return item.pattern.toLowerCase().includes(searchTerm) || item.examples.some(ex => ex.ko.toLowerCase().includes(searchTerm) || ex.en.toLowerCase().includes(searchTerm));
+                        // Pattern data structure
+                        const patternMatch = item.pattern.toLowerCase().includes(searchTerm);
+                        const examplesMatch = item.examples && item.examples.some(ex => 
+                            (ex.ko && ex.ko.toLowerCase().includes(searchTerm)) || 
+                            (ex.en && ex.en.toLowerCase().includes(searchTerm))
+                        );
+                        return patternMatch || examplesMatch;
                     } else {
-                        return item.ko.toLowerCase().includes(searchTerm) || item.en.toLowerCase().includes(searchTerm) || (item.analysis && item.analysis.point.toLowerCase().includes(searchTerm));
+                        // Cheonilmun or Academic data structure
+                        const koMatch = item.ko && item.ko.toLowerCase().includes(searchTerm);
+                        const enMatch = item.en && item.en.toLowerCase().includes(searchTerm);
+                        const analysisMatch = item.analysis && item.analysis.point && 
+                            item.analysis.point.toLowerCase().includes(searchTerm);
+                        return koMatch || enMatch || analysisMatch;
                     }
                 });
 
@@ -492,29 +535,33 @@
 
         // --- 데이터 초기화 함수들 ---
         function resetReviewData() {
-            // Clear all review data sources
-            masterData.cheonilmun.length = 0;
-            masterData.patterns.length = 0;
+            // 원본 데이터 복원 (천일문, 패턴)
+            masterData.cheonilmun = [...originalData.cheonilmun];
+            masterData.patterns = [...originalData.patterns];
+            
+            // 사용자 추가 데이터만 삭제
             masterData.academic.length = 0;
             
             // Update the dashboard count
             updateReviewCount();
             
             // Show success message
-            alert('복습 데이터가 초기화되었습니다.');
+            alert('복습 데이터가 초기화되었습니다. 원본 학습 자료(천일문, 생활영어)는 보존되었습니다.');
         }
 
         function resetLibraryData() {
-            // Clear all library data (same as review data)
-            masterData.cheonilmun.length = 0;
-            masterData.patterns.length = 0;
+            // 원본 데이터 복원 (천일문, 패턴)
+            masterData.cheonilmun = [...originalData.cheonilmun];
+            masterData.patterns = [...originalData.patterns];
+            
+            // 사용자 추가 데이터만 삭제
             masterData.academic.length = 0;
             
             // Update the dashboard count
             updateReviewCount();
             
             // Show success message
-            alert('라이브러리 데이터가 초기화되었습니다.');
+            alert('라이브러리 데이터가 초기화되었습니다. 원본 학습 자료(천일문, 생활영어)는 보존되었습니다.');
         }
     </script>
 </body>
