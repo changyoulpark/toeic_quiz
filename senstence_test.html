@@ -112,6 +112,115 @@
             currentIndex: 0,
         };
 
+        // --- 간격 복습 시스템 ---
+        const SPACED_REPETITION_INTERVALS = [
+            1,    // 1일 후
+            3,    // 3일 후  
+            7,    // 1주일 후
+            14,   // 2주일 후
+            30,   // 1개월 후
+            90    // 3개월 후 (마스터 레벨)
+        ];
+
+        // 학습 진행 상황을 localStorage에서 로드
+        function loadReviewProgress() {
+            const saved = localStorage.getItem('reviewProgress');
+            return saved ? JSON.parse(saved) : {};
+        }
+
+        // 학습 진행 상황을 localStorage에 저장
+        function saveReviewProgress(progress) {
+            localStorage.setItem('reviewProgress', JSON.stringify(progress));
+        }
+
+        // 항목의 고유 ID 생성
+        function getItemId(item) {
+            if (item.id) return String(item.id);
+            if (item.type === 'pattern' && item.pattern) return `pattern_${item.pattern}`;
+            if (item.type === 'academic') return item.id;
+            return `item_${item.en ? item.en.substring(0, 50) : Math.random()}`;
+        }
+
+        // 다음 복습 날짜 계산
+        function calculateNextReviewDate(currentLevel, isCorrect) {
+            const now = new Date();
+            let nextLevel = currentLevel;
+            
+            if (isCorrect) {
+                nextLevel = Math.min(currentLevel + 1, SPACED_REPETITION_INTERVALS.length - 1);
+            } else {
+                // 틀렸으면 레벨을 뒤로 이동 (최소 0)
+                nextLevel = Math.max(0, currentLevel - 1);
+            }
+            
+            const daysToAdd = SPACED_REPETITION_INTERVALS[nextLevel];
+            const nextDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+            
+            return {
+                nextReviewDate: nextDate,
+                reviewLevel: nextLevel
+            };
+        }
+
+        // 오늘 복습할 항목 필터링
+        function getItemsDueForReview() {
+            const progress = loadReviewProgress();
+            const today = new Date();
+            today.setHours(23, 59, 59, 999); // 오늘 끝까지
+            
+            const allItems = [...masterData.cheonilmun, ...masterData.patterns, ...masterData.academic];
+            
+            return allItems.filter(item => {
+                const itemId = getItemId(item);
+                const itemProgress = progress[itemId];
+                
+                // 아직 학습하지 않은 항목은 복습 대상이 아님
+                if (!itemProgress) {
+                    return false;
+                }
+                
+                // 마스터 레벨에 도달한 항목은 복습하지 않음
+                if (itemProgress.reviewLevel >= SPACED_REPETITION_INTERVALS.length - 1) {
+                    return false;
+                }
+                
+                // 다음 복습일이 오늘 또는 이전인 항목만 포함
+                const nextReviewDate = new Date(itemProgress.nextReviewDate);
+                return nextReviewDate <= today;
+            });
+        }
+
+        // 학습 기록 업데이트
+        function recordLearningProgress(item, isCorrect) {
+            const progress = loadReviewProgress();
+            const itemId = getItemId(item);
+            const now = new Date();
+            
+            if (!progress[itemId]) {
+                // 첫 학습
+                progress[itemId] = {
+                    studiedAt: now.toISOString(),
+                    reviewLevel: 0,
+                    correctCount: isCorrect ? 1 : 0,
+                    totalAttempts: 1,
+                    lastReviewResult: isCorrect
+                };
+            } else {
+                // 복습
+                progress[itemId].totalAttempts++;
+                if (isCorrect) progress[itemId].correctCount++;
+                progress[itemId].lastReviewResult = isCorrect;
+            }
+            
+            // 다음 복습 일정 계산
+            const nextReview = calculateNextReviewDate(progress[itemId].reviewLevel, isCorrect);
+            progress[itemId].nextReviewDate = nextReview.nextReviewDate.toISOString();
+            progress[itemId].reviewLevel = nextReview.reviewLevel;
+            
+            saveReviewProgress(progress);
+            return progress[itemId];
+        }
+
         // --- DOM 요소 ---
         const dashboardScreen = document.getElementById('dashboard-screen');
         const moduleScreen = document.getElementById('module-screen');
@@ -165,7 +274,8 @@
         }
 
         function updateReviewCount() {
-            const count = [...masterData.cheonilmun, ...masterData.patterns, ...masterData.academic].length;
+            const dueItems = getItemsDueForReview();
+            const count = dueItems.length;
             document.getElementById('review-count').textContent = count;
         }
 
@@ -183,12 +293,14 @@
             switch(moduleType) {
                 case 'review':
                     moduleTitle.textContent = '🧠 오늘의 복습';
-                    sessionState.queue = [...masterData.cheonilmun, ...masterData.patterns, ...masterData.academic].sort(() => 0.5 - Math.random());
+                    const dueItems = getItemsDueForReview();
+                    sessionState.queue = [...dueItems].sort(() => 0.5 - Math.random());
                     sessionState.currentIndex = 0;
                     if (sessionState.queue.length === 0) {
                         moduleContent.innerHTML = `
                             <div class="text-center p-8">
-                                <p class="text-slate-500 mb-4">복습할 내용이 없습니다. 먼저 학습 내용을 추가해주세요.</p>
+                                <p class="text-slate-500 mb-4">오늘 복습할 내용이 없습니다. 새로운 학습을 시작해보세요!</p>
+                                <p class="text-sm text-slate-400 mb-4">💡 팁: 천일문이나 패턴 학습을 완료하면 간격 복습에 자동으로 추가됩니다.</p>
                                 <button id="reset-review-btn" class="btn btn-secondary">복습 데이터 초기화</button>
                             </div>`;
                         const resetBtn = document.getElementById('reset-review-btn');
@@ -385,22 +497,54 @@
             const quizInput = document.getElementById('quiz-input');
             const userAnswer = quizInput ? quizInput.value.trim() : '';
             let feedbackHtml = '';
+            let isCorrect = true; // Default for non-review modes
 
             switch(quizType) {
                 case 'review':
                     const answer = item.type === 'pattern' ? item.pattern : (item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, ''));
-                    const isCorrect = userAnswer.toLowerCase() === answer.toLowerCase();
+                    isCorrect = userAnswer.toLowerCase() === answer.toLowerCase();
+                    
+                    // 학습 진행 상황 기록
+                    const progress = recordLearningProgress(item, isCorrect);
+                    
+                    // 다음 복습 정보 생성
+                    const nextReviewDate = new Date(progress.nextReviewDate);
+                    const nextReviewText = nextReviewDate.toLocaleDateString('ko-KR');
+                    const intervalText = progress.reviewLevel < SPACED_REPETITION_INTERVALS.length - 1 ? 
+                        `${SPACED_REPETITION_INTERVALS[progress.reviewLevel]}일 후` : '마스터 완료';
+                    
                     feedbackHtml = `<div class="p-4 border-l-4 rounded-md ${isCorrect ? 'feedback-correct' : 'feedback-incorrect'}">
                                       <p class="font-bold">${isCorrect ? '정답입니다! 🎉' : '아쉬워요!'}</p>
                                       <p><strong>정답:</strong> ${answer}</p>
+                                      <div class="mt-3 p-3 bg-slate-50 rounded-lg text-sm">
+                                          <p><strong>📊 복습 진행률:</strong> ${progress.correctCount}/${progress.totalAttempts} (${Math.round(progress.correctCount/progress.totalAttempts*100)}%)</p>
+                                          <p><strong>📅 다음 복습:</strong> ${progress.reviewLevel >= SPACED_REPETITION_INTERVALS.length - 1 ? '완료됨 🎊' : `${nextReviewText} (${intervalText})`}</p>
+                                          <p><strong>🔄 복습 단계:</strong> ${progress.reviewLevel + 1}/${SPACED_REPETITION_INTERVALS.length}</p>
+                                      </div>
                                   </div>`;
                     break;
                 case 'cheonilmun':
-                    feedbackHtml = `<div class="p-4 border-l-4 rounded-md feedback-correct"><p class="font-bold">모범 번역</p><p>${item.ko}</p></div>`;
+                    // 천일문 학습 완료 시에도 학습 기록 저장
+                    recordLearningProgress(item, true);
+                    feedbackHtml = `<div class="p-4 border-l-4 rounded-md feedback-correct">
+                                      <p class="font-bold">모범 번역</p>
+                                      <p>${item.ko}</p>
+                                      <div class="mt-3 p-3 bg-green-50 rounded-lg text-sm">
+                                          <p class="text-green-700">✅ 이 문장이 복습 시스템에 추가되었습니다!</p>
+                                      </div>
+                                  </div>`;
                     break;
                 case 'pattern':
+                    // 패턴 학습 완료 시에도 학습 기록 저장
+                    recordLearningProgress(item, true);
                     const exampleAnswer = item.examples[1] ? item.examples[1].en : "Great job applying the pattern!";
-                    feedbackHtml = `<div class="p-4 border-l-4 rounded-md feedback-correct"><p class="font-bold">좋은 시도입니다!</p><p><strong>모범 답안 예시:</strong> ${exampleAnswer}</p></div>`;
+                    feedbackHtml = `<div class="p-4 border-l-4 rounded-md feedback-correct">
+                                      <p class="font-bold">좋은 시도입니다!</p>
+                                      <p><strong>모범 답안 예시:</strong> ${exampleAnswer}</p>
+                                      <div class="mt-3 p-3 bg-green-50 rounded-lg text-sm">
+                                          <p class="text-green-700">✅ 이 패턴이 복습 시스템에 추가되었습니다!</p>
+                                      </div>
+                                  </div>`;
                     break;
             }
             
@@ -414,8 +558,13 @@
                     renderQuiz(quizType);
                 });
             } else {
-                quizNav.innerHTML = `<button id="finish-quiz-btn" class="btn btn-secondary w-full">학습 완료</button>`;
-                document.getElementById('finish-quiz-btn').addEventListener('click', showDashboard);
+                const completionMessage = quizType === 'review' ? '복습 완료! 🎉' : '학습 완료';
+                quizNav.innerHTML = `<button id="finish-quiz-btn" class="btn btn-secondary w-full">${completionMessage}</button>`;
+                document.getElementById('finish-quiz-btn').addEventListener('click', () => {
+                    // 복습 카운트 업데이트
+                    updateReviewCount();
+                    showDashboard();
+                });
             }
         }
 
@@ -445,12 +594,19 @@
                     };
                     masterData.academic.push(newEntry);
                     
+                    // 자동으로 첫 복습 일정 설정 (1일 후)
+                    recordLearningProgress(newEntry, true);
+                    
                     document.getElementById('analysis-output').innerHTML = `
                         <div class="bg-green-50 p-4 rounded-lg">
                             <h4 class="font-semibold text-green-800">🔬 저장 완료</h4>
-                            <p class="mt-2 text-green-700">문장이 개인 데이터베이스에 저장되었습니다. 앞으로 '오늘의 복습'에 자동으로 포함됩니다.</p>
+                            <p class="mt-2 text-green-700">문장이 개인 데이터베이스에 저장되었습니다.</p>
+                            <p class="mt-1 text-green-600 text-sm">📅 내일부터 복습 퀴즈에 포함됩니다!</p>
                         </div>`;
                     academicInput.value = '';
+                    
+                    // 복습 카운트 업데이트
+                    updateReviewCount();
                 }
             });
         }
@@ -535,16 +691,14 @@
 
         // --- 데이터 초기화 함수들 ---
         function resetReviewData() {
-            // 모든 데이터 삭제 (천일문, 패턴, 사용자 추가 데이터)
-            masterData.cheonilmun.length = 0;
-            masterData.patterns.length = 0;
-            masterData.academic.length = 0;
+            // 복습 진행 상황 초기화 (학습 기록 삭제)
+            localStorage.removeItem('reviewProgress');
             
             // Update the dashboard count
             updateReviewCount();
             
             // Show success message
-            alert('복습 데이터가 초기화되었습니다.');
+            alert('복습 데이터가 초기화되었습니다. 학습 기록이 모두 삭제되어 처음부터 다시 시작할 수 있습니다.');
         }
 
         function resetLibraryData() {
@@ -552,6 +706,10 @@
             masterData.cheonilmun.length = 0;
             masterData.patterns.length = 0;
             masterData.academic.length = 0;
+            
+            // 원본 데이터로 복원 
+            masterData.cheonilmun = [...originalData.cheonilmun];
+            masterData.patterns = [...originalData.patterns];
             
             // Update the dashboard count
             updateReviewCount();
