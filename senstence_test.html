@@ -535,33 +535,29 @@
 
         // --- 데이터 초기화 함수들 ---
         function resetReviewData() {
-            // 원본 데이터 복원 (천일문, 패턴)
-            masterData.cheonilmun = [...originalData.cheonilmun];
-            masterData.patterns = [...originalData.patterns];
-            
-            // 사용자 추가 데이터만 삭제
+            // 모든 데이터 삭제 (천일문, 패턴, 사용자 추가 데이터)
+            masterData.cheonilmun.length = 0;
+            masterData.patterns.length = 0;
             masterData.academic.length = 0;
             
             // Update the dashboard count
             updateReviewCount();
             
             // Show success message
-            alert('복습 데이터가 초기화되었습니다. 원본 학습 자료(천일문, 생활영어)는 보존되었습니다.');
+            alert('복습 데이터가 초기화되었습니다.');
         }
 
         function resetLibraryData() {
-            // 원본 데이터 복원 (천일문, 패턴)
-            masterData.cheonilmun = [...originalData.cheonilmun];
-            masterData.patterns = [...originalData.patterns];
-            
-            // 사용자 추가 데이터만 삭제
+            // 모든 데이터 삭제 (천일문, 패턴, 사용자 추가 데이터)
+            masterData.cheonilmun.length = 0;
+            masterData.patterns.length = 0;
             masterData.academic.length = 0;
             
             // Update the dashboard count
             updateReviewCount();
             
             // Show success message
-            alert('라이브러리 데이터가 초기화되었습니다. 원본 학습 자료(천일문, 생활영어)는 보존되었습니다.');
+            alert('라이브러리 데이터가 초기화되었습니다.');
         }
     </script>
 </body>
