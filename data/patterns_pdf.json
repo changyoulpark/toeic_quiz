@@ -1,0 +1,144 @@
+[
+  {
+    "pattern": "\"Sorry, honey. Let's see. we're meeting the Sombergs for lunch and four of",
+    "pattern_ko": "",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "'The Phantom of the Opera'. Then we'll come home.\"",
+        "ko": "'다했니?'라고 물을 때는 Have you"
+      },
+      {
+        "en": "Have you done yours",
+        "ko": "네 거는 다했어요?"
+      }
+    ]
+  },
+  {
+    "pattern": "Let's ~",
+    "pattern_ko": "버스를 타자!",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "Here we are",
+        "ko": "다 왔어"
+      },
+      {
+        "en": "Here is the Lotte amusement park",
+        "ko": "여기가 롯데놀이공원이야요."
+      }
+    ]
+  },
+  {
+    "pattern": "Would you like more coffee",
+    "pattern_ko": "커피 더 마실래요?",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "I would like coffee, please",
+        "ko": "커피 좀 더주세요."
+      }
+    ]
+  },
+  {
+    "pattern": "Would you like dessert",
+    "pattern_ko": "디저트 먹을래요?",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "상대방에게 뭔가를 물어볼 때는 Do you",
+        "ko": "Do you know where my house is? 우리집이 어디 있는지 알아요?"
+      },
+      {
+        "en": "Do you know how airplane fly",
+        "ko": "비행기가 어떻게 나는지 아니요?"
+      }
+    ]
+  },
+  {
+    "pattern": "Do you have a dog",
+    "pattern_ko": "너도 개를 갖고 있니요?",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "I don't have a dog",
+        "ko": "난 개를 갖고 있지 않아요."
+      },
+      {
+        "en": "When Beethoven gives birth go her children I'll give you one of them.",
+        "ko": "베에토벤이 새끼낳으면 한 마리 줄께요."
+      }
+    ]
+  },
+  {
+    "pattern": "Later would you like to invite me",
+    "pattern_ko": "나중에 날 초대해 줄래요.",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "I want to go your house. I want to be there",
+        "ko": "너네 집에 가고 싶어. 거기서 지내고"
+      },
+      {
+        "en": "싶어.",
+        "ko": "You'll be there. 우리집에서 지내게 할께요."
+      }
+    ]
+  },
+  {
+    "pattern": "\"Philip, why don't you spend the night here?,\" suggested Mom",
+    "pattern_ko": "여기서 자고 가",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "\"Oh, thanks, Mrs Lee. I'll call my parents.\"",
+        "ko": "고마워요 아주머니. 부모님에게 전화해야겠어요."
+      },
+      {
+        "en": "무엇하는게 낫겠어요라고 할때는 might(may) as well",
+        "ko": "\"I might as well spend the night here.\" 여기서 자고 가는게 낫겠어요."
+      }
+    ]
+  },
+  {
+    "pattern": "함께 하자고 하려면 Let's",
+    "pattern_ko": "함께 하자고 하려면 Let's",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "I'm tired of sitting here",
+        "ko": "난 여기 앉아 있는 데 지쳤어요."
+      }
+    ]
+  },
+  {
+    "pattern": "~",
+    "pattern_ko": "라는 말이지? Are you saying that",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "Are you saying that all they do is watching TV?",
+        "ko": "그 애들이 하는 거라곤 TV만 본다는 말이지요?"
+      },
+      {
+        "en": "And they have accidents",
+        "ko": "그리고 사고도 쳤어요."
+      }
+    ]
+  },
+  {
+    "pattern": "How about ~",
+    "pattern_ko": "",
+    "level": "easy",
+    "examples": [
+      {
+        "en": "You can give it to them over the weekend before you see the doctor.",
+        "ko": "네가 그걸 일주일 안에 부모님에게 가져다 드려 의사에게 가기 전에 말이지요."
+      },
+      {
+        "en": "All right",
+        "ko": "좋았어요."
+      }
+    ]
+  }
+]
