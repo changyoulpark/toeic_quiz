@@ -153,7 +153,24 @@
                     moduleTitle.textContent = '🧠 오늘의 복습';
                     sessionState.queue = [...masterData.cheonilmun, ...masterData.patterns, ...masterData.academic].sort(() => 0.5 - Math.random());
                     sessionState.currentIndex = 0;
-                    renderQuiz('review');
+                    if (sessionState.queue.length === 0) {
+                        moduleContent.innerHTML = `
+                            <div class="text-center p-8">
+                                <p class="text-slate-500 mb-4">복습할 내용이 없습니다. 먼저 학습 내용을 추가해주세요.</p>
+                                <button id="reset-review-btn" class="btn btn-secondary">복습 데이터 초기화</button>
+                            </div>`;
+                        const resetBtn = document.getElementById('reset-review-btn');
+                        if (resetBtn) {
+                            resetBtn.addEventListener('click', () => {
+                                if (confirm('복습 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                                    resetReviewData();
+                                    showDashboard();
+                                }
+                            });
+                        }
+                    } else {
+                        renderQuiz('review');
+                    }
                     break;
                 case 'cheonilmun':
                     moduleTitle.textContent = '🏗️ 천일문 구조 분석';
@@ -209,8 +226,26 @@
         // --- 퀴즈 렌더링 로직 ---
         function renderQuiz(quizType) {
             if (sessionState.queue.length === 0 || sessionState.currentIndex >= sessionState.queue.length) {
-                 moduleContent.innerHTML = `<div class="text-center p-8"><p class="text-slate-500">모든 학습을 완료했습니다!</p></div>`;
-                 return;
+                const resetButtonHtml = quizType === 'review' ? 
+                    `<div class="mt-4"><button id="reset-review-btn" class="btn btn-secondary">복습 데이터 초기화</button></div>` : '';
+                moduleContent.innerHTML = `
+                    <div class="text-center p-8">
+                        <p class="text-slate-500">모든 학습을 완료했습니다!</p>
+                        ${resetButtonHtml}
+                    </div>`;
+                
+                if (quizType === 'review') {
+                    const resetBtn = document.getElementById('reset-review-btn');
+                    if (resetBtn) {
+                        resetBtn.addEventListener('click', () => {
+                            if (confirm('복습 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                                resetReviewData();
+                                showDashboard();
+                            }
+                        });
+                    }
+                }
+                return;
             }
 
             const item = sessionState.queue[sessionState.currentIndex];
@@ -232,9 +267,15 @@
                     break;
             }
 
+            const resetButtonHtml = quizType === 'review' ? 
+                `<button id="reset-review-quiz-btn" class="btn btn-secondary ml-2">데이터 초기화</button>` : '';
+            
             moduleContent.innerHTML = `
                 <div class="p-4">
-                    <h3 class="text-xl font-semibold">${header}</h3>
+                    <div class="flex justify-between items-center">
+                        <h3 class="text-xl font-semibold">${header}</h3>
+                        ${resetButtonHtml}
+                    </div>
                     <div id="quiz-content-area" class="mt-4">${quizContent}</div>
                     <div id="feedback-container" class="mt-4"></div>
                     <div id="quiz-nav" class="flex gap-4 mt-6">
@@ -244,6 +285,18 @@
             `;
             
             document.getElementById('check-answer-btn').addEventListener('click', () => checkAnswer(quizType, item));
+            
+            if (quizType === 'review') {
+                const resetQuizBtn = document.getElementById('reset-review-quiz-btn');
+                if (resetQuizBtn) {
+                    resetQuizBtn.addEventListener('click', () => {
+                        if (confirm('복습 데이터를 모두 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                            resetReviewData();
+                            showDashboard();
+                        }
+                    });
+                }
+            }
         }
 
         function createFillInBlankQuiz(item) {
@@ -347,13 +400,16 @@
                 if (!academicInput) return;
                 const text = academicInput.value.trim();
                 if (text) {
+                    const now = new Date();
                     const newEntry = {
                         type: 'academic',
                         id: `academic_${Date.now()}`,
                         en: text,
                         ko: '(사용자 입력 문장)',
                         answer: text.split(' ').pop().replace(/[.,!?]/g, ''),
-                        analysis: { point: '사용자 입력 문장', explanation: '이 문장은 개인 데이터베이스에 저장되어 주기적으로 복습 퀴즈에 출제됩니다.', vocab: {} }
+                        analysis: { point: '사용자 입력 문장', explanation: '이 문장은 개인 데이터베이스에 저장되어 주기적으로 복습 퀴즈에 출제됩니다.', vocab: {} },
+                        createdAt: now.toISOString(),
+                        createdAtFormatted: now.toLocaleDateString('ko-KR') + ' ' + now.toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
                     };
                     masterData.academic.push(newEntry);
                     
@@ -373,11 +429,25 @@
             libraryContent.className = 'max-h-[50vh] overflow-y-auto custom-scrollbar pr-2';
             
             moduleContent.innerHTML = `
-                <input type="text" id="library-search-input" class="w-full p-3 border rounded-lg mb-4" placeholder="학습한 내용 검색하기 (예: 분사구문, was going to)...">
+                <div class="flex justify-between items-center mb-4">
+                    <input type="text" id="library-search-input" class="flex-1 p-3 border rounded-lg mr-4" placeholder="학습한 내용 검색하기 (예: 분사구문, was going to)...">
+                    <button id="reset-library-btn" class="btn btn-secondary whitespace-nowrap">라이브러리 초기화</button>
+                </div>
             `;
             moduleContent.appendChild(libraryContent);
             
             const searchInput = document.getElementById('library-search-input');
+            const resetLibraryBtn = document.getElementById('reset-library-btn');
+            
+            if (resetLibraryBtn) {
+                resetLibraryBtn.addEventListener('click', () => {
+                    if (confirm('학습 라이브러리의 모든 데이터를 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다.')) {
+                        resetLibraryData();
+                        filterAndRender(); // Refresh the display
+                        updateReviewCount(); // Update dashboard count
+                    }
+                });
+            }
 
             function filterAndRender() {
                 const searchTerm = searchInput.value.toLowerCase();
@@ -397,15 +467,20 @@
                 }
 
                 libraryContent.innerHTML = filteredData.map(item => {
+                    const timestampHtml = item.createdAtFormatted ? 
+                        `<p class="text-xs text-slate-400 mt-1">등록일: ${item.createdAtFormatted}</p>` : '';
+                    
                     if (item.pattern) {
                         return `<div class="p-3 mb-2 border rounded-md bg-slate-50">
                                     <p class="font-semibold text-emerald-700">${item.pattern}</p>
                                     <p class="text-sm text-slate-600">${item.examples[0].en}</p>
+                                    ${timestampHtml}
                                 </div>`;
                     } else {
                         return `<div class="p-3 mb-2 border rounded-md bg-slate-50">
                                     <p class="font-semibold text-sky-700">${item.unit || '나의 문장'}</p>
                                     <p class="text-sm text-slate-600">${item.en}</p>
+                                    ${timestampHtml}
                                 </div>`;
                     }
                 }).join('');
@@ -413,6 +488,33 @@
 
             searchInput.addEventListener('input', filterAndRender);
             filterAndRender(); // 초기 렌더링
+        }
+
+        // --- 데이터 초기화 함수들 ---
+        function resetReviewData() {
+            // Clear all review data sources
+            masterData.cheonilmun.length = 0;
+            masterData.patterns.length = 0;
+            masterData.academic.length = 0;
+            
+            // Update the dashboard count
+            updateReviewCount();
+            
+            // Show success message
+            alert('복습 데이터가 초기화되었습니다.');
+        }
+
+        function resetLibraryData() {
+            // Clear all library data (same as review data)
+            masterData.cheonilmun.length = 0;
+            masterData.patterns.length = 0;
+            masterData.academic.length = 0;
+            
+            // Update the dashboard count
+            updateReviewCount();
+            
+            // Show success message
+            alert('라이브러리 데이터가 초기화되었습니다.');
         }
     </script>
 </body>
