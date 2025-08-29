@@ -473,34 +473,121 @@
 
         // --- Timeline Widget Rendering ---
         function renderTimeline() {
-            console.log('renderTimeline called');
             const timelineContainer = document.getElementById('timeline-container');
             const reviewNowCountEl = document.getElementById('review-now-count');
             const upcomingCountEl = document.getElementById('upcoming-count');
             const newItemsCountEl = document.getElementById('new-items-count');
             
-            if (!timelineContainer) {
-                console.log('Timeline container not found');
-                return;
-            }
+            if (!timelineContainer) return;
             
             try {
                 const reviewData = calculateReviewCounts();
-                const counts = reviewData.counts;
+                const { timeline, counts } = reviewData;
                 
                 // Update count badges
                 if (reviewNowCountEl) reviewNowCountEl.textContent = counts.reviewNow;
                 if (upcomingCountEl) upcomingCountEl.textContent = counts.upcoming;
                 if (newItemsCountEl) newItemsCountEl.textContent = counts.new;
                 
-                // Simple message for now
-                timelineContainer.innerHTML = '<div class="text-center text-slate-500 py-4"><p>📝 타임라인 시스템이 활성화되었습니다</p><p class="text-sm">복습: ' + counts.reviewNow + ' | 예정: ' + counts.upcoming + ' | 신규: ' + counts.new + '</p></div>';
+                if (timeline.length === 0) {
+                    timelineContainer.innerHTML = `
+                        <div class="text-center text-slate-500 py-4">
+                            <p>📝 아직 학습 기록이 없습니다</p>
+                            <p class="text-sm">새로운 학습을 시작해보세요!</p>
+                        </div>
+                    `;
+                    return;
+                }
                 
-                console.log('Timeline rendered successfully:', counts);
+                // Sort timeline items: overdue -> due -> upcoming -> later
+                const sortedTimeline = [...timeline].sort((a, b) => {
+                    const statusOrder = { 'overdue': 0, 'due': 1, 'todayQueue': 2, 'upcoming': 3, 'later': 4 };
+                    if (a.status !== b.status) {
+                        return statusOrder[a.status] - statusOrder[b.status];
+                    }
+                    // Within same status, sort by time
+                    if (a.next && b.next) {
+                        return a.next - b.next;
+                    }
+                    return 0;
+                });
+                
+                const timelineHtml = sortedTimeline.map(timelineItem => {
+                    const item = timelineItem.item;
+                    const countdown = timelineItem.countdown;
+                    const itemName = getItemDisplayName(item);
+                    const source = getItemSource(item);
+                    
+                    const statusColors = {
+                        'overdue': 'border-red-300 bg-red-50',
+                        'due': 'border-orange-300 bg-orange-50',
+                        'todayQueue': 'border-orange-300 bg-orange-50',
+                        'upcoming': 'border-blue-300 bg-blue-50',
+                        'later': 'border-gray-300 bg-gray-50'
+                    };
+                    
+                    const countdownColors = {
+                        'overdue': 'text-red-600 font-semibold',
+                        'due': 'text-orange-600 font-semibold',
+                        'upcoming': 'text-blue-600',
+                        'later': 'text-gray-500'
+                    };
+                    
+                    const colorClass = statusColors[timelineItem.status] || statusColors['later'];
+                    const countdownClass = countdownColors[countdown.status] || countdownColors['later'];
+                    
+                    const canPullForward = timelineItem.status === 'upcoming' || timelineItem.status === 'later';
+                    const pullButton = canPullForward ? 
+                        `<button class="pull-forward-btn text-xs px-2 py-1 bg-indigo-100 hover:bg-indigo-200 text-indigo-700 rounded ml-2 transition-colors" data-item-id="${timelineItem.itemId}">당겨 복습</button>` : '';
+                    
+                    return `
+                        <div class="timeline-item border rounded-lg p-3 ${colorClass} hover:shadow-sm transition-shadow cursor-pointer" 
+                             data-item-id="${timelineItem.itemId}">
+                            <div class="flex justify-between items-start">
+                                <div class="flex-1 min-w-0">
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm font-medium text-slate-700 truncate">${itemName}</span>
+                                        <span class="text-xs px-2 py-0.5 bg-slate-200 text-slate-600 rounded">${source}</span>
+                                    </div>
+                                    <div class="text-xs text-slate-500 mt-1 flex items-center">
+                                        <span class="${countdownClass} timeline-countdown" data-next="${timelineItem.next || ''}">${countdown.label}</span>
+                                        ${pullButton}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                timelineContainer.innerHTML = timelineHtml;
+                
+                // Add click handlers for timeline items
+                timelineContainer.querySelectorAll('.timeline-item').forEach(element => {
+                    element.addEventListener('click', (e) => {
+                        if (e.target.classList.contains('pull-forward-btn')) return; // Don't trigger on button clicks
+                        const itemId = element.dataset.itemId;
+                        // TODO: Implement direct review functionality
+                        console.log('Review item:', itemId);
+                    });
+                });
+                
+                // Add click handlers for pull-forward buttons
+                timelineContainer.querySelectorAll('.pull-forward-btn').forEach(button => {
+                    button.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        const itemId = button.dataset.itemId;
+                        pullForwardReview(itemId);
+                    });
+                });
                 
             } catch (error) {
                 console.error('Failed to render timeline:', error);
-                timelineContainer.innerHTML = '<div class="text-center text-red-500 py-4"><p>⚠️ 타임라인을 불러올 수 없습니다</p></div>';
+                timelineContainer.innerHTML = `
+                    <div class="text-center text-red-500 py-4">
+                        <p>⚠️ 타임라인을 불러올 수 없습니다</p>
+                        <p class="text-sm">새로고침을 시도해보세요.</p>
+                    </div>
+                `;
             }
         }
 
@@ -634,15 +721,6 @@
                     updateDailyPlanSummary();
                 }
             });
-        }
-
-        // Page Visibility API for performance optimization  
-        function handleVisibilityChange() {
-            if (document.hidden) {
-                console.log('Tab became inactive');
-            } else {
-                console.log('Tab became active');
-            }
         }
 
         // --- Plan Mode: Data management ---
@@ -1184,21 +1262,12 @@
                 updateReviewCount();
                 
                 // Initialize timeline system
-                try {
-                    console.log('Initializing timeline system...');
-                    renderTimeline();
-                    console.log('Timeline initialized successfully');
-                } catch (error) {
-                    console.error('Timeline initialization failed:', error);
-                }
+                renderTimeline();
+                startRealTimeUpdates();
+                setupCrossTabSync();
                 
                 // Page Visibility API setup
-                try {
-                    document.addEventListener('visibilitychange', handleVisibilityChange);
-                    console.log('Visibility change handler added');
-                } catch (error) {
-                    console.error('Visibility handler failed:', error);
-                }
+                document.addEventListener('visibilitychange', handleVisibilityChange);
             });
         });
 

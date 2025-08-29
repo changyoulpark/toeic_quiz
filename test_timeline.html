@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>Test Timeline</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body>
+    <div id="timeline-container"></div>
+    <script>
+        console.log("Script starting...");
+        
+        // Test our timeline functions
+        function formatDuration(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            
+            if (hours > 0) {
+                return `${hours}시간 ${minutes.toString().padStart(2, '0')}분`;
+            } else {
+                return `${minutes}분`;
+            }
+        }
+
+        function getCountdown(nextISO) {
+            const now = Date.now();
+            const nextTime = nextISO ? new Date(nextISO).getTime() : null;
+            
+            if (!nextTime || isNaN(nextTime)) {
+                return { status: 'later', label: '—', deltaMs: Infinity };
+            }
+            
+            const deltaMs = nextTime - now;
+            
+            if (deltaMs < 0) {
+                // Overdue
+                return { status: 'overdue', label: `+${formatDuration(-deltaMs)}`, deltaMs };
+            } else if (deltaMs === 0) {
+                // Due now
+                return { status: 'due', label: '00:00', deltaMs: 0 };
+            } else if (deltaMs <= 86400000) {
+                // Within 24 hours
+                return { status: 'upcoming', label: `남은 ${formatDuration(deltaMs)}`, deltaMs };
+            } else {
+                // Later than 24 hours
+                return { status: 'later', label: formatDateTime(nextTime), deltaMs };
+            }
+        }
+
+        function formatDateTime(timestamp) {
+            const date = new Date(timestamp);
+            const today = new Date();
+            const tomorrow = new Date(today);
+            tomorrow.setDate(today.getDate() + 1);
+            
+            if (date.toDateString() === today.toDateString()) {
+                return `오늘 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            } else if (date.toDateString() === tomorrow.toDateString()) {
+                return `내일 ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            } else {
+                return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
+            }
+        }
+        
+        // Test the functions
+        console.log("Testing countdown functions...");
+        const testTime1 = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(); // 2 hours from now
+        const testTime2 = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30 minutes ago
+        
+        console.log("2 hours from now:", getCountdown(testTime1));
+        console.log("30 minutes ago:", getCountdown(testTime2));
+        
+        document.getElementById('timeline-container').innerHTML = `
+            <div class="p-4">
+                <h3>Timeline Test</h3>
+                <p>2 hours from now: ${JSON.stringify(getCountdown(testTime1))}</p>
+                <p>30 minutes ago: ${JSON.stringify(getCountdown(testTime2))}</p>
+            </div>
+        `;
+        
+        console.log("Script completed successfully!");
+    </script>
+</body>
+</html>
