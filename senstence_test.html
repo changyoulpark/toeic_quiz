@@ -916,7 +916,7 @@
             };
         }
 
-        // 오늘 복습할 항목 필터링
+        // 오늘 복습할 항목 필터링 (Plan 모드용 - 기존 로직)
         function getItemsDueForReview() {
             const progress = loadReviewProgress();
             const today = new Date();
@@ -941,6 +941,20 @@
                 // 다음 복습일이 오늘 또는 이전인 항목만 포함
                 const nextReviewDate = new Date(itemProgress.nextReviewDate);
                 return nextReviewDate <= today;
+            });
+        }
+
+        // 모든 학습한 항목 반환 (간격 복습 연습용 - 시간 간격 무시)
+        function getAllStudiedItems() {
+            const progress = loadReviewProgress();
+            const allItems = [...masterData.cheonilmun, ...masterData.patterns, ...masterData.academic];
+            
+            return allItems.filter(item => {
+                const itemId = getItemId(item);
+                const itemProgress = progress[itemId];
+                
+                // 학습한 적이 있는 항목만 포함 (시간 간격과 마스터 레벨 무시)
+                return itemProgress !== undefined;
             });
         }
 
@@ -1238,8 +1252,9 @@
                 return;
             }
             
-            const dueItems = getItemsDueForReview();
-            const count = dueItems.length;
+            // 간격 복습 연습용: 모든 학습한 항목 표시
+            const studiedItems = getAllStudiedItems();
+            const count = studiedItems.length;
             document.getElementById('review-count').textContent = count;
         }
 
@@ -1267,8 +1282,8 @@
                     break;
                 case 'review':
                     moduleTitle.textContent = '🧠 복습 연습 (Drill)';
-                    const dueItems = getItemsDueForReview();
-                    sessionState.queue = [...dueItems].sort(() => 0.5 - Math.random());
+                    const studiedItems = getAllStudiedItems();
+                    sessionState.queue = [...studiedItems].sort(() => 0.5 - Math.random());
                     sessionState.currentIndex = 0;
                     if (sessionState.queue.length === 0) {
                         moduleContent.innerHTML = `
