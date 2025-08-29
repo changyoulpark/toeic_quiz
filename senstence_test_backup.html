@@ -631,6 +631,11 @@
                 updateDailyPlanSummary();
                 
                 console.log('Pulled forward item for review:', strId);
+            } catch (error) {
+                console.error('Error pulling forward review:', error);
+            }
+        }
+
         // --- Real-time Update System ---
         let countdownInterval = null;
         let updateFrequency = 60000; // 1 minute default
