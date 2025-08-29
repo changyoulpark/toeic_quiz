@@ -146,15 +146,16 @@
             const now = new Date();
             let nextLevel = currentLevel;
             
+            // Use current level's interval for scheduling, then update level
+            const daysToAdd = SPACED_REPETITION_INTERVALS[currentLevel];
+            const nextDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
+            
             if (isCorrect) {
                 nextLevel = Math.min(currentLevel + 1, SPACED_REPETITION_INTERVALS.length - 1);
             } else {
                 // 틀렸으면 레벨을 뒤로 이동 (최소 0)
                 nextLevel = Math.max(0, currentLevel - 1);
             }
-            
-            const daysToAdd = SPACED_REPETITION_INTERVALS[nextLevel];
-            const nextDate = new Date(now.getTime() + daysToAdd * 24 * 60 * 60 * 1000);
             
             return {
                 nextReviewDate: nextDate,
