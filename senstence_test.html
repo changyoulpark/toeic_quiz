@@ -111,6 +111,9 @@
             queue: [],
             currentIndex: 0,
         };
+        
+        // 데이터 로딩 상태 관리
+        let dataLoaded = false;
 
         // --- 간격 복습 시스템 ---
         const SPACED_REPETITION_INTERVALS = [
@@ -245,7 +248,11 @@
         
         // --- 초기화 ---
         document.addEventListener('DOMContentLoaded', () => {
+            // 초기 카운트 표시 (데이터 로딩 전)
+            updateReviewCount();
+            
             loadOriginalData().then(() => {
+                dataLoaded = true;
                 updateReviewCount();
             });
         });
@@ -275,6 +282,12 @@
         }
 
         function updateReviewCount() {
+            // 데이터가 로드되지 않았으면 0으로 표시
+            if (!dataLoaded) {
+                document.getElementById('review-count').textContent = '0';
+                return;
+            }
+            
             const dueItems = getItemsDueForReview();
             const count = dueItems.length;
             document.getElementById('review-count').textContent = count;
@@ -711,6 +724,9 @@
             // 원본 데이터로 복원 
             masterData.cheonilmun = [...originalData.cheonilmun];
             masterData.patterns = [...originalData.patterns];
+            
+            // 데이터 로딩 상태는 여전히 유효
+            dataLoaded = true;
             
             // Update the dashboard count
             updateReviewCount();
