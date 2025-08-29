@@ -99,9 +99,6 @@
             patterns: [],
             academic: []
         };
-        
-        // Make it globally accessible for debugging
-        window.masterData = masterData;
 
         // --- 원본 학습 자료 (삭제 방지용) ---
         const originalData = {
@@ -117,9 +114,6 @@
         
         // 데이터 로딩 상태 관리
         let dataLoaded = false;
-        
-        // Make it globally accessible for debugging
-        window.dataLoaded = dataLoaded;
 
         // --- 간격 복습 시스템 ---
         const SPACED_REPETITION_INTERVALS = [
@@ -259,7 +253,6 @@
             
             loadOriginalData().then(() => {
                 dataLoaded = true;
-                window.dataLoaded = dataLoaded; // Update global reference
                 updateReviewCount();
             });
         });
@@ -267,15 +260,12 @@
         // --- 원본 데이터 로딩 함수들 ---
         async function loadOriginalData() {
             try {
-                console.log('Loading original data...');
-                
                 // 천일문 데이터 로드
                 const cheonilmunResponse = await fetch('./data/cheonilmun_sample.json');
                 if (cheonilmunResponse.ok) {
                     const cheonilmunData = await cheonilmunResponse.json();
                     originalData.cheonilmun = [...cheonilmunData];
                     masterData.cheonilmun = [...cheonilmunData];
-                    console.log('Cheonilmun data loaded:', cheonilmunData.length, 'items');
                 }
 
                 // 생활영어 패턴 데이터 로드
@@ -284,10 +274,7 @@
                     const patternsData = await patternsResponse.json();
                     originalData.patterns = [...patternsData];
                     masterData.patterns = [...patternsData];
-                    console.log('Patterns data loaded:', patternsData.length, 'items');
                 }
-                
-                console.log('Original data loading complete');
             } catch (error) {
                 console.error('원본 데이터 로드 실패:', error);
                 // 오류가 발생해도 앱이 계속 작동하도록 함
