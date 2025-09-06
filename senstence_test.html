@@ -199,8 +199,81 @@
             7,    // 1주일 후
             14,   // 2주일 후
             30,   // 1개월 후
-            90    // 3개월 후 (마스터 레벨)
+            60,   // 2개월 후
+            120   // 4개월 후
         ];
+
+        // --- Gemini API Integration ---
+        const GEMINI_API_KEY = "AIzaSyDJ44NNeUBB_jHa8w5dErfvhWrwDsygWRE";
+        
+        async function callGemini(prompt, isJson = true) {
+            const generationConfig = isJson ? { 
+                "responseMimeType": "application/json", 
+                "temperature": 0.6 
+            } : { 
+                "temperature": 0.4 
+            };
+            const payload = { 
+                contents: [{ role: "user", parts: [{ text: prompt }] }], 
+                generationConfig 
+            };
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`;
+            
+            try {
+                const response = await fetch(apiUrl, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(payload) 
+                });
+                
+                if (!response.ok) throw new Error(`API Error: ${response.status}`);
+                
+                const result = await response.json();
+                const responseText = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                
+                if (responseText) {
+                    return isJson ? JSON.parse(responseText) : responseText;
+                } else { 
+                    throw new Error("Invalid response structure from API"); 
+                }
+            } catch (error) { 
+                console.error("Gemini API call failed:", error); 
+                return null; 
+            }
+        }
+
+        async function generatePatternTaskWithGemini(pattern, patternKo) {
+            const prompt = `You are an English learning assistant for Korean students. For the pattern "${pattern}" (${patternKo}), create a flexible learning task. Return a JSON object with these keys:
+
+1. "task_type": One of ["completion", "transformation", "creation", "application"]
+2. "instruction": Clear instruction in Korean on what the student should do
+3. "example_input": If applicable, an example sentence or scenario to work with
+4. "sample_answer": A good example answer that demonstrates proper use of the pattern
+5. "evaluation_criteria": Brief criteria for what makes a good answer (in Korean)
+6. "hints": Array of 2-3 helpful hints in Korean
+
+Make the task engaging and practical, encouraging creative use of the pattern rather than just rote memorization.`;
+
+            return await callGemini(prompt);
+        }
+
+        async function evaluatePatternAnswerWithGemini(pattern, patternKo, userAnswer, taskType) {
+            const prompt = `You are evaluating a Korean student's use of the English pattern "${pattern}" (${patternKo}). 
+
+Student's answer: "${userAnswer}"
+Task type: ${taskType}
+
+Provide constructive feedback in Korean. Return a JSON object with:
+1. "is_correct": boolean indicating if the pattern was used properly
+2. "feedback": Encouraging feedback in Korean
+3. "suggestions": Array of 1-2 specific improvement suggestions in Korean  
+4. "score": Number from 1-5 indicating quality of usage
+5. "corrected_version": If applicable, an improved version of their answer
+
+Be encouraging and focus on learning rather than just correctness.`;
+
+            return await callGemini(prompt);
+        }
 
         // --- Plan Mode: New interval progression system ---
         const BASE_INTERVALS_HOURS = [6, 12]; // 6h, 12h
@@ -385,6 +458,19 @@
             } else {
                 return `${date.getMonth() + 1}/${date.getDate()} ${date.getHours().toString().padStart(2, '0')}:${date.getMinutes().toString().padStart(2, '0')}`;
             }
+        }
+
+        // Utility function to remove duplicates by ID
+        function dedupeById(items) {
+            const seen = new Set();
+            return items.filter(item => {
+                const id = getItemId(item);
+                if (seen.has(id)) {
+                    return false;
+                }
+                seen.add(id);
+                return true;
+            });
         }
 
         function calculateReviewCounts() {
@@ -794,6 +880,7 @@
             return {
                 ...updated,
                 intervalMs,
+                intervalDays: Math.round(intervalMs / (24 * 60 * 60 * 1000)),
                 grade
             };
         }
@@ -1373,7 +1460,7 @@
                 const progressText = `${planSession.phase} ${currentIndex + 1}/${totalItems}`;
 
                 if (item.pattern) {
-                    // Pattern item rendering for Plan mode
+                    // Pattern item rendering for Plan mode with Gemini AI integration
                     moduleContent.innerHTML = `
                         <div class="space-y-6">
                             <div class="flex justify-between items-center">
@@ -1383,24 +1470,147 @@
                             <div class="bg-slate-50 p-6 rounded-lg">
                                 <h3 class="text-xl font-bold text-indigo-700 mb-3">패턴: ${item.pattern}</h3>
                                 <p class="text-slate-600 mb-4">${item.pattern_ko}</p>
-                                <div class="space-y-2">
-                                    <p class="font-medium">예시:</p>
-                                    <p class="text-slate-800">${item.examples[0]?.en || ''}</p>
-                                    <p class="text-slate-600">${item.examples[0]?.ko || ''}</p>
+                                <div id="pattern-loading" class="text-center py-4">
+                                    <div class="inline-flex items-center px-4 py-2 font-semibold leading-6 text-sm shadow rounded-md text-white bg-indigo-500">
+                                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                        </svg>
+                                        AI가 개인화된 학습 과제를 생성하고 있습니다...
+                                    </div>
                                 </div>
-                            </div>
-                            <div>
-                                <label class="block font-medium text-slate-700 mb-2">이 패턴을 사용해서 문장을 만들어보세요:</label>
-                                <textarea id="user-answer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
-                                          rows="3" placeholder="패턴을 활용한 문장을 작성해주세요..."></textarea>
-                            </div>
-                            <div class="flex gap-3">
-                                <button id="submit-answer-btn" class="btn btn-primary">제출</button>
-                                <button id="skip-answer-btn" class="btn btn-secondary">건너뛰기</button>
+                                <div id="pattern-task-content" class="hidden">
+                                    <!-- Dynamic task content will be inserted here -->
+                                </div>
                             </div>
                             <div id="feedback-area"></div>
                         </div>
                     `;
+
+                    // Generate dynamic task using Gemini AI
+                    generatePatternTaskWithGemini(item.pattern, item.pattern_ko).then(taskData => {
+                        const loadingDiv = document.getElementById('pattern-loading');
+                        const contentDiv = document.getElementById('pattern-task-content');
+                        
+                        if (taskData && loadingDiv && contentDiv) {
+                            loadingDiv.classList.add('hidden');
+                            contentDiv.classList.remove('hidden');
+                            
+                            contentDiv.innerHTML = `
+                                <div class="space-y-4">
+                                    <div class="bg-blue-50 p-4 rounded-lg">
+                                        <h4 class="font-semibold text-blue-800 mb-2">📋 학습 과제</h4>
+                                        <p class="text-blue-700">${taskData.instruction}</p>
+                                        ${taskData.example_input ? `<div class="mt-2 p-2 bg-white rounded border-l-4 border-blue-300">
+                                            <p class="text-sm text-gray-600">예시 상황:</p>
+                                            <p class="text-gray-800">${taskData.example_input}</p>
+                                        </div>` : ''}
+                                    </div>
+                                    
+                                    ${taskData.hints ? `<div class="bg-yellow-50 p-3 rounded-lg">
+                                        <h5 class="font-medium text-yellow-800 mb-1">💡 힌트</h5>
+                                        <ul class="text-sm text-yellow-700 list-disc list-inside space-y-1">
+                                            ${taskData.hints.map(hint => `<li>${hint}</li>`).join('')}
+                                        </ul>
+                                    </div>` : ''}
+                                    
+                                    <div>
+                                        <label class="block font-medium text-slate-700 mb-2">답변을 작성해주세요:</label>
+                                        <textarea id="user-answer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
+                                                  rows="3" placeholder="여기에 답변을 작성해주세요..."></textarea>
+                                    </div>
+                                    
+                                    <div class="flex gap-3">
+                                        <button id="submit-answer-btn" class="btn btn-primary">제출</button>
+                                        <button id="skip-answer-btn" class="btn btn-secondary">건너뛰기</button>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Store task data for later evaluation
+                            window.currentPatternTask = taskData;
+                        } else {
+                            // Fallback to original static content if AI fails
+                            loadingDiv.classList.add('hidden');
+                            contentDiv.classList.remove('hidden');
+                            contentDiv.innerHTML = `
+                                <div class="space-y-4">
+                                    <div class="space-y-2">
+                                        <p class="font-medium">예시:</p>
+                                        <p class="text-slate-800">${item.examples[0]?.en || ''}</p>
+                                        <p class="text-slate-600">${item.examples[0]?.ko || ''}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block font-medium text-slate-700 mb-2">이 패턴을 사용해서 문장을 만들어보세요:</label>
+                                        <textarea id="user-answer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
+                                                  rows="3" placeholder="패턴을 활용한 문장을 작성해주세요..."></textarea>
+                                    </div>
+                                    <div class="flex gap-3">
+                                        <button id="submit-answer-btn" class="btn btn-primary">제출</button>
+                                        <button id="skip-answer-btn" class="btn btn-secondary">건너뛰기</button>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        // Add event listeners
+                        const submitBtn = document.getElementById('submit-answer-btn');
+                        const skipBtn = document.getElementById('skip-answer-btn');
+                        
+                        if (submitBtn) {
+                            submitBtn.addEventListener('click', () => {
+                                const userAnswer = document.getElementById('user-answer')?.value || '';
+                                handlePlanAnswer(item, userAnswer);
+                            });
+                        }
+                        
+                        if (skipBtn) {
+                            skipBtn.addEventListener('click', () => handlePlanAnswer(item, ''));
+                        }
+                    }).catch(error => {
+                        console.error('Pattern task generation failed:', error);
+                        // Show fallback content
+                        const loadingDiv = document.getElementById('pattern-loading');
+                        const contentDiv = document.getElementById('pattern-task-content');
+                        
+                        if (loadingDiv && contentDiv) {
+                            loadingDiv.classList.add('hidden');
+                            contentDiv.classList.remove('hidden');
+                            contentDiv.innerHTML = `
+                                <div class="space-y-4">
+                                    <div class="space-y-2">
+                                        <p class="font-medium">예시:</p>
+                                        <p class="text-slate-800">${item.examples[0]?.en || ''}</p>
+                                        <p class="text-slate-600">${item.examples[0]?.ko || ''}</p>
+                                    </div>
+                                    <div>
+                                        <label class="block font-medium text-slate-700 mb-2">이 패턴을 사용해서 문장을 만들어보세요:</label>
+                                        <textarea id="user-answer" class="w-full p-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
+                                                  rows="3" placeholder="패턴을 활용한 문장을 작성해주세요..."></textarea>
+                                    </div>
+                                    <div class="flex gap-3">
+                                        <button id="submit-answer-btn" class="btn btn-primary">제출</button>
+                                        <button id="skip-answer-btn" class="btn btn-secondary">건너뛰기</button>
+                                    </div>
+                                </div>
+                            `;
+                            
+                            // Add event listeners for fallback
+                            const submitBtn = document.getElementById('submit-answer-btn');
+                            const skipBtn = document.getElementById('skip-answer-btn');
+                            
+                            if (submitBtn) {
+                                submitBtn.addEventListener('click', () => {
+                                    const userAnswer = document.getElementById('user-answer')?.value || '';
+                                    handlePlanAnswer(item, userAnswer);
+                                });
+                            }
+                            
+                            if (skipBtn) {
+                                skipBtn.addEventListener('click', () => handlePlanAnswer(item, ''));
+                            }
+                        }
+                    });
                 } else {
                     // Grammar/Translation item rendering for Plan mode
                     if (planSession.phase === 'review') {
@@ -1453,28 +1663,24 @@
                                 <div id="feedback-area"></div>
                             </div>
                         `;
-                    }
-                }
+                        
+                        // Add event listeners for non-pattern items
+                        const submitBtn = document.getElementById('submit-answer-btn');
+                        const userAnswerField = document.getElementById('user-answer');
 
-                // Add event listeners for Plan mode
-                const submitBtn = document.getElementById('submit-answer-btn');
-                const skipBtn = document.getElementById('skip-answer-btn');
-                const userAnswerField = document.getElementById('user-answer');
-
-                if (submitBtn) {
-                    submitBtn.addEventListener('click', () => handlePlanAnswer(item));
-                }
-                if (skipBtn) {
-                    skipBtn.addEventListener('click', () => handlePlanAnswer(item, ''));
-                }
-                if (userAnswerField) {
-                    userAnswerField.addEventListener('keydown', (e) => {
-                        if (e.key === 'Enter' && !e.shiftKey) {
-                            e.preventDefault();
-                            handlePlanAnswer(item);
+                        if (submitBtn) {
+                            submitBtn.addEventListener('click', () => handlePlanAnswer(item));
                         }
-                    });
-                    userAnswerField.focus();
+                        if (userAnswerField) {
+                            userAnswerField.addEventListener('keydown', (e) => {
+                                if (e.key === 'Enter' && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handlePlanAnswer(item);
+                                }
+                            });
+                            userAnswerField.focus();
+                        }
+                    }
                 }
 
                 return;
@@ -1686,9 +1892,17 @@
 
         // --- Plan Mode: Answer Handling ---
         function handlePlanAnswer(item, userAnswer) {
+            const itemId = String(getItemId(item));
+            
+            // Check if this item has already been processed in this session
+            const alreadyProcessed = planSession.results[planSession.phase].items.some(
+                processedItem => getItemId(processedItem) === getItemId(item)
+            );
+            
             // Determine grade based on content and user input
             let grade = 3; // Default: good
             let isCorrect = true;
+            let result = null;
             
             // For review items, check accuracy
             if (planSession.phase === 'review') {
@@ -1709,25 +1923,37 @@
             }
             // For new items and output, we assume they tried (grade 3)
             
-            // Update SM-2 schedule
-            const result = calculateNextReview(item, grade);
-            
-            // Remove from today queue if this was a first exposure
-            const itemId = String(getItemId(item));
-            if (isTodayQueueItem(itemId)) {
-                removeFromTodayQueue(itemId);
-            }
-            
-            // Record result in plan session
-            planSession.results[planSession.phase].items.push({
-                ...item,
-                grade,
-                isCorrect,
-                userAnswer
-            });
-            
-            if (isCorrect) {
-                planSession.results[planSession.phase].correct++;
+            // Update SM-2 schedule only if not already processed
+            if (!alreadyProcessed) {
+                result = calculateNextReview(item, grade);
+                
+                // Remove from today queue if this was a first exposure
+                if (isTodayQueueItem(itemId)) {
+                    removeFromTodayQueue(itemId);
+                }
+                
+                // Record result in plan session
+                planSession.results[planSession.phase].items.push({
+                    ...item,
+                    grade,
+                    isCorrect,
+                    userAnswer
+                });
+                
+                if (isCorrect) {
+                    planSession.results[planSession.phase].correct++;
+                }
+            } else {
+                // For already processed items, get current progress for display
+                const progress = loadPlanProgress();
+                const currentProgress = progress[itemId];
+                if (currentProgress) {
+                    result = {
+                        ...currentProgress,
+                        intervalDays: Math.round((currentProgress.next - currentProgress.last) / (24 * 60 * 60 * 1000))
+                    };
+                }
+                console.log('Item already processed in this session, not updating review schedule');
             }
             
             // Show feedback
@@ -1755,15 +1981,127 @@
                     </div>
                 `;
             } else if (planSession.phase === 'output') {
-                feedbackHtml = `
-                    <div class="p-4 border-l-4 rounded-md feedback-correct">
-                        <p class="font-bold">변형 연습 완료! ✍️</p>
-                        <p><strong>원문:</strong> ${item.originalKo || item.ko}</p>
-                        <div class="mt-2 text-sm text-yellow-600">
-                            <p>💪 창작 연습이 완료되었습니다!</p>
+                // Check if this is a pattern item and use Gemini AI evaluation
+                if (item.pattern && userAnswer && window.currentPatternTask) {
+                    // Use Gemini AI to evaluate pattern answer
+                    const taskType = window.currentPatternTask.task_type || 'creation';
+                    
+                    // Show loading feedback first
+                    feedbackHtml = `
+                        <div class="p-4 border-l-4 rounded-md feedback-correct">
+                            <div class="flex items-center">
+                                <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                </svg>
+                                <p class="font-bold">AI가 답변을 평가하고 있습니다...</p>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                    
+                    document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
+                    
+                    // Evaluate with Gemini AI
+                    evaluatePatternAnswerWithGemini(item.pattern, item.pattern_ko, userAnswer, taskType).then(evaluation => {
+                        if (evaluation) {
+                            feedbackHtml = `
+                                <div class="p-4 border-l-4 rounded-md ${evaluation.is_correct ? 'feedback-correct' : 'feedback-incorrect'}">
+                                    <p class="font-bold">${evaluation.is_correct ? '훌륭합니다! 🎉' : '좋은 시도입니다! 💪'}</p>
+                                    <div class="mt-3 space-y-3">
+                                        <div class="bg-white p-3 rounded-lg">
+                                            <p class="font-medium text-gray-800">피드백:</p>
+                                            <p class="text-gray-700">${evaluation.feedback}</p>
+                                        </div>
+                                        
+                                        ${evaluation.corrected_version ? `
+                                            <div class="bg-blue-50 p-3 rounded-lg">
+                                                <p class="font-medium text-blue-800">개선된 답안:</p>
+                                                <p class="text-blue-700">${evaluation.corrected_version}</p>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        ${evaluation.suggestions && evaluation.suggestions.length > 0 ? `
+                                            <div class="bg-yellow-50 p-3 rounded-lg">
+                                                <p class="font-medium text-yellow-800">개선 제안:</p>
+                                                <ul class="text-yellow-700 list-disc list-inside space-y-1">
+                                                    ${evaluation.suggestions.map(suggestion => `<li>${suggestion}</li>`).join('')}
+                                                </ul>
+                                            </div>
+                                        ` : ''}
+                                        
+                                        <div class="bg-green-50 p-3 rounded-lg text-sm">
+                                            <p class="text-green-700">
+                                                📊 AI 평가 점수: ${evaluation.score}/5 | 
+                                                ✅ 이 패턴이 복습 시스템에 추가되었습니다!
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
+                            `;
+                        } else {
+                            // Fallback to basic feedback if AI fails
+                            feedbackHtml = `
+                                <div class="p-4 border-l-4 rounded-md feedback-correct">
+                                    <p class="font-bold">패턴 연습 완료! ✍️</p>
+                                    <p><strong>패턴:</strong> ${item.pattern}</p>
+                                    <p><strong>작성하신 답변:</strong> ${userAnswer}</p>
+                                    <div class="mt-2 text-sm text-green-600">
+                                        <p>✅ 이 패턴이 복습 시스템에 추가되었습니다!</p>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                        
+                        document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
+                        
+                        // Add next button
+                        const nextButton = `<button id="next-plan-btn" class="btn btn-primary">다음 →</button>`;
+                        document.getElementById('feedback-area').innerHTML += `<div class="mt-4">${nextButton}</div>`;
+                        
+                        document.getElementById('next-plan-btn').addEventListener('click', () => {
+                            planSession.currentIndex++;
+                            renderQuiz('plan');
+                        });
+                    }).catch(error => {
+                        console.error('Pattern evaluation failed:', error);
+                        // Fallback feedback
+                        feedbackHtml = `
+                            <div class="p-4 border-l-4 rounded-md feedback-correct">
+                                <p class="font-bold">패턴 연습 완료! ✍️</p>
+                                <p><strong>패턴:</strong> ${item.pattern}</p>
+                                <p><strong>작성하신 답변:</strong> ${userAnswer}</p>
+                                <div class="mt-2 text-sm text-green-600">
+                                    <p>✅ 이 패턴이 복습 시스템에 추가되었습니다!</p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
+                        
+                        // Add next button
+                        const nextButton = `<button id="next-plan-btn" class="btn btn-primary">다음 →</button>`;
+                        document.getElementById('feedback-area').innerHTML += `<div class="mt-4">${nextButton}</div>`;
+                        
+                        document.getElementById('next-plan-btn').addEventListener('click', () => {
+                            planSession.currentIndex++;
+                            renderQuiz('plan');
+                        });
+                    });
+                    
+                    // Early return to avoid showing the next button twice
+                    return;
+                } else {
+                    // Regular output phase feedback for non-pattern items
+                    feedbackHtml = `
+                        <div class="p-4 border-l-4 rounded-md feedback-correct">
+                            <p class="font-bold">변형 연습 완료! ✍️</p>
+                            <p><strong>원문:</strong> ${item.originalKo || item.ko}</p>
+                            <div class="mt-2 text-sm text-yellow-600">
+                                <p>💪 창작 연습이 완료되었습니다!</p>
+                            </div>
+                        </div>
+                    `;
+                }
             }
             
             document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
