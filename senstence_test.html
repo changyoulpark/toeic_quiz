@@ -302,6 +302,237 @@ Be encouraging but provide specific detailed analysis comparing the student's an
             return await callGemini(prompt);
         }
 
+        // Handle pattern items in review mode with AI evaluation
+        async function handlePatternReviewAnswer(item, userAnswer, alreadyProcessed) {
+            const itemId = String(getItemId(item));
+            
+            // Show loading feedback first
+            let feedbackHtml = `
+                <div class="p-4 border-l-4 rounded-md feedback-correct">
+                    <div class="flex items-center">
+                        <svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-indigo-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <p class="font-bold">AI가 패턴 사용을 평가하고 있습니다...</p>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
+            
+            try {
+                // Evaluate with Gemini AI
+                const evaluation = await evaluatePatternAnswerWithGemini(item.pattern, item.pattern_ko, userAnswer, 'review');
+                
+                let grade = 3; // Default: good
+                let isCorrect = true;
+                let result = null;
+                
+                if (evaluation && typeof evaluation === 'object') {
+                    // Use AI evaluation to determine correctness and grade
+                    isCorrect = evaluation.is_correct || false;
+                    
+                    // Convert AI score (1-5) to SM-2 grade (0-4)
+                    const aiScore = evaluation.score || 3;
+                    if (!userAnswer || userAnswer.trim() === '') {
+                        grade = 0; // No answer
+                        isCorrect = false;
+                    } else if (isCorrect && aiScore >= 4) {
+                        grade = 4; // Easy/correct
+                    } else if (isCorrect && aiScore >= 3) {
+                        grade = 3; // Good
+                    } else if (aiScore >= 2) {
+                        grade = 2; // Hard but acceptable
+                    } else {
+                        grade = 1; // Wrong
+                        isCorrect = false;
+                    }
+                } else {
+                    // Fallback: assume they tried
+                    grade = 3;
+                    isCorrect = true;
+                }
+                
+                // Update SM-2 schedule only if not already processed
+                if (!alreadyProcessed) {
+                    result = calculateNextReview(item, grade);
+                    
+                    // Remove from today queue if this was a first exposure
+                    if (isTodayQueueItem(itemId)) {
+                        removeFromTodayQueue(itemId);
+                    }
+                    
+                    // Record result in plan session
+                    planSession.results[planSession.phase].items.push({
+                        ...item,
+                        grade,
+                        isCorrect,
+                        userAnswer
+                    });
+                    
+                    if (isCorrect) {
+                        planSession.results[planSession.phase].correct++;
+                    }
+                } else {
+                    // For already processed items, get current progress for display
+                    const progress = loadPlanProgress();
+                    const currentProgress = progress[itemId];
+                    if (currentProgress) {
+                        result = {
+                            ...currentProgress,
+                            intervalDays: Math.round((currentProgress.next - currentProgress.last) / (24 * 60 * 60 * 1000))
+                        };
+                    }
+                    console.log('Item already processed in this session, not updating review schedule');
+                }
+                
+                // Show AI-powered feedback
+                if (evaluation && typeof evaluation === 'object') {
+                    const nextDate = result ? new Date(result.next).toLocaleDateString('ko-KR') : '계산 중';
+                    
+                    feedbackHtml = `
+                        <div class="p-4 border-l-4 rounded-md ${isCorrect ? 'feedback-correct' : 'feedback-incorrect'}">
+                            <p class="font-bold">${evaluation.is_correct ? '훌륭합니다! 🎉' : '좋은 시도입니다! 💪'}</p>
+                            <div class="mt-3 space-y-3">
+                                <div class="bg-white p-3 rounded-lg">
+                                    <p class="font-medium text-gray-800">AI 피드백:</p>
+                                    <p class="text-gray-700">${evaluation.feedback || '좋은 시도였습니다!'}</p>
+                                </div>
+                                
+                                ${evaluation.corrected_version && evaluation.corrected_version.trim() ? `
+                                    <div class="bg-blue-50 p-3 rounded-lg">
+                                        <p class="font-medium text-blue-800">개선된 답안:</p>
+                                        <p class="text-blue-700">${evaluation.corrected_version}</p>
+                                    </div>
+                                ` : ''}
+                                
+                                ${evaluation.suggestions && Array.isArray(evaluation.suggestions) && evaluation.suggestions.length > 0 ? `
+                                    <div class="bg-yellow-50 p-3 rounded-lg">
+                                        <p class="font-medium text-yellow-800">개선 제안:</p>
+                                        <ul class="text-yellow-700 list-disc list-inside space-y-1">
+                                            ${evaluation.suggestions.filter(s => s && typeof s === 'string').map(suggestion => `<li>${suggestion}</li>`).join('')}
+                                        </ul>
+                                    </div>
+                                ` : ''}
+                                
+                                <div class="mt-2 text-sm text-slate-600">
+                                    <p>📊 AI 평가 점수: ${evaluation.score || 3}/5</p>
+                                    <p>다음 복습: ${nextDate}${result ? ` (${result.intervalDays}일 후)` : ''}</p>
+                                    ${result ? `<p>EF: ${result.ef.toFixed(1)}, 단계: ${result.stage + 1}</p>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    // Enhanced fallback feedback
+                    const nextDate = result ? new Date(result.next).toLocaleDateString('ko-KR') : '계산 중';
+                    feedbackHtml = `
+                        <div class="p-4 border-l-4 rounded-md feedback-correct">
+                            <p class="font-bold">패턴 복습 완료! ✍️</p>
+                            <div class="mt-3 space-y-3">
+                                <div class="bg-white p-3 rounded-lg">
+                                    <p class="font-medium text-gray-800">작성하신 답변:</p>
+                                    <p class="text-gray-700">"${userAnswer}"</p>
+                                </div>
+                                
+                                <div class="bg-blue-50 p-3 rounded-lg">
+                                    <p class="font-medium text-blue-800">복습한 패턴:</p>
+                                    <p class="text-blue-700">${item.pattern} - ${item.pattern_ko}</p>
+                                </div>
+                                
+                                <div class="mt-2 text-sm text-slate-600">
+                                    <p>다음 복습: ${nextDate}${result ? ` (${result.intervalDays}일 후)` : ''}</p>
+                                    ${result ? `<p>EF: ${result.ef.toFixed(1)}, 단계: ${result.stage + 1}</p>` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+                
+                document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
+                
+                // Add next button
+                const nextButton = `<button id="next-plan-btn" class="btn btn-primary">다음 →</button>`;
+                document.getElementById('feedback-area').innerHTML += `<div class="mt-4">${nextButton}</div>`;
+                
+                document.getElementById('next-plan-btn').addEventListener('click', () => {
+                    planSession.currentIndex++;
+                    renderQuiz('plan');
+                });
+                
+            } catch (error) {
+                console.error('Pattern evaluation failed:', error);
+                
+                // Fallback with basic processing
+                let grade = 3; // Default: good
+                let isCorrect = true;
+                let result = null;
+                
+                // Update SM-2 schedule only if not already processed
+                if (!alreadyProcessed) {
+                    result = calculateNextReview(item, grade);
+                    
+                    // Remove from today queue if this was a first exposure
+                    if (isTodayQueueItem(itemId)) {
+                        removeFromTodayQueue(itemId);
+                    }
+                    
+                    // Record result in plan session
+                    planSession.results[planSession.phase].items.push({
+                        ...item,
+                        grade,
+                        isCorrect,
+                        userAnswer
+                    });
+                    
+                    if (isCorrect) {
+                        planSession.results[planSession.phase].correct++;
+                    }
+                }
+                
+                // Show fallback feedback
+                const nextDate = result ? new Date(result.next).toLocaleDateString('ko-KR') : '계산 중';
+                feedbackHtml = `
+                    <div class="p-4 border-l-4 rounded-md feedback-correct">
+                        <p class="font-bold">패턴 복습 완료! ✍️</p>
+                        <div class="mt-3 space-y-3">
+                            <div class="bg-white p-3 rounded-lg">
+                                <p class="font-medium text-gray-800">작성하신 답변:</p>
+                                <p class="text-gray-700">"${userAnswer}"</p>
+                            </div>
+                            
+                            <div class="bg-blue-50 p-3 rounded-lg">
+                                <p class="font-medium text-blue-800">복습한 패턴:</p>
+                                <p class="text-blue-700">${item.pattern} - ${item.pattern_ko}</p>
+                            </div>
+                            
+                            <div class="bg-yellow-50 p-3 rounded-lg">
+                                <p class="font-medium text-yellow-800">💡 참고:</p>
+                                <p class="text-yellow-700 text-sm">AI 평가가 일시적으로 사용할 수 없어 기본 처리되었습니다.</p>
+                            </div>
+                            
+                            <div class="mt-2 text-sm text-slate-600">
+                                <p>다음 복습: ${nextDate}${result ? ` (${result.intervalDays}일 후)` : ''}</p>
+                                ${result ? `<p>EF: ${result.ef.toFixed(1)}, 단계: ${result.stage + 1}</p>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                document.getElementById('feedback-area').innerHTML = feedbackHtml + createAnalysisHTML(item);
+                
+                // Add next button
+                const nextButton = `<button id="next-plan-btn" class="btn btn-primary">다음 →</button>`;
+                document.getElementById('feedback-area').innerHTML += `<div class="mt-4">${nextButton}</div>`;
+                
+                document.getElementById('next-plan-btn').addEventListener('click', () => {
+                    planSession.currentIndex++;
+                    renderQuiz('plan');
+                });
+            }
+        }
+
         // --- Plan Mode: New interval progression system ---
         const BASE_INTERVALS_HOURS = [6, 12]; // 6h, 12h
         const BASE_INTERVALS_DAYS = [1, 3, 7, 14, 30, 60, 120]; // 1d, 3d, 7d, 14d, 30d, 60d, 120d
@@ -1982,19 +2213,26 @@ Be encouraging but provide specific detailed analysis comparing the student's an
             
             // For review items, check accuracy
             if (planSession.phase === 'review') {
-                const expectedAnswer = item.type === 'pattern' ? item.pattern : 
-                                     (item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, ''));
-                const quizInput = document.getElementById('quiz-input');
-                const actualAnswer = quizInput ? quizInput.value.trim() : '';
-                
-                if (!actualAnswer) {
-                    grade = 0; // No answer
-                    isCorrect = false;
-                } else if (actualAnswer.toLowerCase() === expectedAnswer.toLowerCase()) {
-                    grade = 4; // Easy/correct
+                // For pattern items, use AI evaluation instead of simple matching
+                if (item.type === 'pattern' && item.pattern) {
+                    // Handle pattern items with AI evaluation
+                    handlePatternReviewAnswer(item, userAnswer, alreadyProcessed);
+                    return;
                 } else {
-                    grade = 1; // Wrong
-                    isCorrect = false;
+                    // For non-pattern items, use traditional matching
+                    const expectedAnswer = item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, '');
+                    const quizInput = document.getElementById('quiz-input');
+                    const actualAnswer = quizInput ? quizInput.value.trim() : '';
+                    
+                    if (!actualAnswer) {
+                        grade = 0; // No answer
+                        isCorrect = false;
+                    } else if (actualAnswer.toLowerCase() === expectedAnswer.toLowerCase()) {
+                        grade = 4; // Easy/correct
+                    } else {
+                        grade = 1; // Wrong
+                        isCorrect = false;
+                    }
                 }
             }
             // For new items and output, we assume they tried (grade 3)
