@@ -1701,6 +1701,31 @@ Be encouraging but provide specific detailed analysis comparing the student's an
             `;
         }
 
+        // --- 퀴즈 형식 결정 로직 ---
+        function getItemQuizFormat(item) {
+            // Determine consistent quiz format based on item characteristics
+            if (item.type === 'pattern') {
+                return 'composition'; // Pattern items always use composition format
+            } else if (item.chapter || item.unit) {
+                return 'translation'; // Cheonilmun items always use translation format
+            } else {
+                return 'fill-in-blank'; // Default format
+            }
+        }
+
+        function createQuizByFormat(item, format) {
+            switch(format) {
+                case 'fill-in-blank':
+                    return createFillInBlankQuiz(item);
+                case 'translation':
+                    return createTranslationQuiz(item);
+                case 'composition':
+                    return createCompositionQuiz(item);
+                default:
+                    return createTranslationQuiz(item);
+            }
+        }
+
         // --- 퀴즈 렌더링 로직 ---
         function renderQuiz(quizType) {
             // Handle Plan mode differently
@@ -1920,28 +1945,63 @@ Be encouraging but provide specific detailed analysis comparing the student's an
                     });
                 } else {
                     // Grammar/Translation item rendering for Plan mode
+                    const itemFormat = getItemQuizFormat(item);
+                    
                     if (planSession.phase === 'review') {
-                        // Review mode uses fill-in-the-blank
-                        const answer = item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, '');
-                        const quizHtml = item.en.replace(answer, `<input type="text" id="quiz-input" class="w-40 border-b-2 border-slate-400 focus:border-indigo-500 outline-none text-center bg-transparent">`);
+                        // Review mode uses consistent format based on item type
+                        let reviewContent = '';
                         
-                        moduleContent.innerHTML = `
-                            <div class="space-y-6">
-                                <div class="flex justify-between items-center">
-                                    <span class="text-slate-500 font-medium">${progressText}</span>
-                                    <span class="text-red-500 text-sm font-medium">복습</span>
+                        if (itemFormat === 'translation') {
+                            // Use translation format for cheonilmun items
+                            reviewContent = `
+                                <div class="space-y-6">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-500 font-medium">${progressText}</span>
+                                        <span class="text-red-500 text-sm font-medium">복습</span>
+                                    </div>
+                                    ${item.chapter ? `<div class="text-sm text-slate-500">${item.chapter} → ${item.unit}</div>` : ''}
+                                    <div class="bg-indigo-50 p-4 rounded-lg mb-4">
+                                        <p class="mt-1 text-indigo-700">${item.analysis ? item.analysis.explanation : '이 문장을 번역해보세요.'}</p>
+                                    </div>
+                                    <div class="bg-slate-100 p-4 rounded-lg">
+                                        <p class="text-lg font-semibold">${item.en}</p>
+                                    </div>
+                                    <div class="mt-6">
+                                        <h4 class="font-semibold text-lg mb-2">📝 퀴즈: 문장 번역하기</h4>
+                                        <textarea id="quiz-input" class="w-full h-24 p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500" 
+                                                  placeholder="위 영어 문장을 우리말로 번역해보세요..."></textarea>
+                                    </div>
+                                    <div class="flex gap-3">
+                                        <button id="check-answer-btn" class="btn btn-primary">정답 확인</button>
+                                    </div>
+                                    <div id="feedback-area"></div>
                                 </div>
-                                ${item.chapter ? `<div class="text-sm text-slate-500">${item.chapter} → ${item.unit}</div>` : ''}
-                                <div class="bg-slate-50 p-6 rounded-lg">
-                                    <p class="text-slate-600 mb-3">${item.ko}</p>
-                                    <div class="text-lg font-mono">${quizHtml}</div>
+                            `;
+                        } else {
+                            // Use fill-in-the-blank format for other items  
+                            const answer = item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, '');
+                            const quizHtml = item.en.replace(answer, `<input type="text" id="quiz-input" class="w-40 border-b-2 border-slate-400 focus:border-indigo-500 outline-none text-center bg-transparent">`);
+                            
+                            reviewContent = `
+                                <div class="space-y-6">
+                                    <div class="flex justify-between items-center">
+                                        <span class="text-slate-500 font-medium">${progressText}</span>
+                                        <span class="text-red-500 text-sm font-medium">복습</span>
+                                    </div>
+                                    ${item.chapter ? `<div class="text-sm text-slate-500">${item.chapter} → ${item.unit}</div>` : ''}
+                                    <div class="bg-slate-50 p-6 rounded-lg">
+                                        <p class="text-slate-600 mb-3">${item.ko}</p>
+                                        <div class="text-lg font-mono">${quizHtml}</div>
+                                    </div>
+                                    <div class="flex gap-3">
+                                        <button id="check-answer-btn" class="btn btn-primary">정답 확인</button>
+                                    </div>
+                                    <div id="feedback-area"></div>
                                 </div>
-                                <div class="flex gap-3">
-                                    <button id="check-answer-btn" class="btn btn-primary">정답 확인</button>
-                                </div>
-                                <div id="feedback-area"></div>
-                            </div>
-                        `;
+                            `;
+                        }
+                        
+                        moduleContent.innerHTML = reviewContent;
                         
                         document.getElementById('check-answer-btn').addEventListener('click', () => {
                             handlePlanAnswer(item);
@@ -2021,18 +2081,21 @@ Be encouraging but provide specific detailed analysis comparing the student's an
             let header = '';
             let quizContent = '';
 
+            // Determine consistent format based on item characteristics, not quiz type
+            const itemFormat = getItemQuizFormat(item);
+            
             switch(quizType) {
                 case 'review':
                     header = `복습 퀴즈 (${sessionState.currentIndex + 1} / ${sessionState.queue.length})`;
-                    quizContent = createFillInBlankQuiz(item);
+                    quizContent = createQuizByFormat(item, itemFormat); // Use consistent format
                     break;
                 case 'cheonilmun':
                     header = `${item.chapter} - ${item.unit} (${sessionState.currentIndex + 1} / ${sessionState.queue.length})`;
-                    quizContent = createTranslationQuiz(item);
+                    quizContent = createQuizByFormat(item, itemFormat); // Use consistent format
                     break;
                 case 'pattern':
                     header = `패턴 응용 퀴즈 (${sessionState.currentIndex + 1} / ${sessionState.queue.length})`;
-                    quizContent = createCompositionQuiz(item);
+                    quizContent = createQuizByFormat(item, itemFormat); // Use consistent format
                     break;
             }
 
@@ -2219,19 +2282,33 @@ Be encouraging but provide specific detailed analysis comparing the student's an
                     handlePatternReviewAnswer(item, userAnswer, alreadyProcessed);
                     return;
                 } else {
-                    // For non-pattern items, use traditional matching
-                    const expectedAnswer = item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, '');
+                    // For non-pattern items, check format and handle accordingly
+                    const itemFormat = getItemQuizFormat(item);
                     const quizInput = document.getElementById('quiz-input');
                     const actualAnswer = quizInput ? quizInput.value.trim() : '';
                     
                     if (!actualAnswer) {
                         grade = 0; // No answer
                         isCorrect = false;
-                    } else if (actualAnswer.toLowerCase() === expectedAnswer.toLowerCase()) {
-                        grade = 4; // Easy/correct
+                    } else if (itemFormat === 'translation') {
+                        // For translation format, we don't have strict matching
+                        // Just check if user provided some answer (lenient grading for translation)
+                        if (actualAnswer.length > 0) {
+                            grade = 3; // Good - user provided translation
+                            isCorrect = true; // Consider it correct since translation can vary
+                        } else {
+                            grade = 0; // No answer
+                            isCorrect = false;
+                        }
                     } else {
-                        grade = 1; // Wrong
-                        isCorrect = false;
+                        // For fill-in-the-blank format, use strict matching
+                        const expectedAnswer = item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, '');
+                        if (actualAnswer.toLowerCase() === expectedAnswer.toLowerCase()) {
+                            grade = 4; // Easy/correct
+                        } else {
+                            grade = 1; // Wrong
+                            isCorrect = false;
+                        }
                     }
                 }
             }
@@ -2273,17 +2350,35 @@ Be encouraging but provide specific detailed analysis comparing the student's an
             // Show feedback
             let feedbackHtml = '';
             if (planSession.phase === 'review') {
+                const itemFormat = getItemQuizFormat(item);
                 const nextDate = new Date(result.next).toLocaleDateString('ko-KR');
-                feedbackHtml = `
-                    <div class="p-4 border-l-4 rounded-md ${isCorrect ? 'feedback-correct' : 'feedback-incorrect'}">
-                        <p class="font-bold">${isCorrect ? '정답입니다! 🎉' : '다시 한번!'}</p>
-                        <p><strong>정답:</strong> ${item.type === 'pattern' ? item.pattern : item.answer}</p>
-                        <div class="mt-2 text-sm text-slate-600">
-                            <p>다음 복습: ${nextDate} (${result.intervalDays}일 후)</p>
-                            <p>EF: ${result.ef.toFixed(1)}, 단계: ${result.stage + 1}</p>
+                
+                if (itemFormat === 'translation') {
+                    // For translation format, show model translation
+                    feedbackHtml = `
+                        <div class="p-4 border-l-4 rounded-md ${isCorrect ? 'feedback-correct' : 'feedback-incorrect'}">
+                            <p class="font-bold">${isCorrect ? '좋은 번역입니다! 🎉' : '다시 한번!'}</p>
+                            <p><strong>모범 번역:</strong> ${item.ko}</p>
+                            <div class="mt-2 text-sm text-slate-600">
+                                <p>다음 복습: ${nextDate} (${result.intervalDays}일 후)</p>
+                                <p>EF: ${result.ef.toFixed(1)}, 단계: ${result.stage + 1}</p>
+                            </div>
                         </div>
-                    </div>
-                `;
+                    `;
+                } else {
+                    // For fill-in-blank format, show exact answer
+                    const correctAnswer = item.type === 'pattern' ? item.pattern : (item.answer || item.en.split(' ').pop().replace(/[.,!?]/g, ''));
+                    feedbackHtml = `
+                        <div class="p-4 border-l-4 rounded-md ${isCorrect ? 'feedback-correct' : 'feedback-incorrect'}">
+                            <p class="font-bold">${isCorrect ? '정답입니다! 🎉' : '다시 한번!'}</p>
+                            <p><strong>정답:</strong> ${correctAnswer}</p>
+                            <div class="mt-2 text-sm text-slate-600">
+                                <p>다음 복습: ${nextDate} (${result.intervalDays}일 후)</p>
+                                <p>EF: ${result.ef.toFixed(1)}, 단계: ${result.stage + 1}</p>
+                            </div>
+                        </div>
+                    `;
+                }
             } else if (planSession.phase === 'new') {
                 feedbackHtml = `
                     <div class="p-4 border-l-4 rounded-md feedback-correct">
