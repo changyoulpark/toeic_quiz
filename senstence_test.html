@@ -10,9 +10,10 @@
     <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Noto Sans KR', sans-serif; }
+        button { min-height: 44px !important; min-width: 44px; padding: 0.5rem 1rem; }
         .dashboard-card { transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out; }
         .dashboard-card:hover { transform: translateY(-5px); box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); }
-        .btn { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: background-color 0.2s; }
+        .btn { padding: 0.75rem 1.5rem; border-radius: 0.5rem; font-weight: 600; transition: background-color 0.2s; min-height: 44px; min-width: 44px; }
         .btn-primary { background-color: #4f46e5; color: white; }
         .btn-primary:hover { background-color: #4338ca; }
         .btn-secondary { background-color: #6b7280; color: white; }
@@ -29,7 +30,7 @@
     <div class="container mx-auto p-4 max-w-5xl">
         <header class="text-center my-8">
             <div class="flex justify-between items-center mb-6">
-                <button onclick="window.location.href='index.html'" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition duration-300">
+                <button onclick="window.location.href='index.html'" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-3 rounded-lg text-sm transition duration-300" style="min-height: 44px;">
                     ← 기본 퀴즈로
                 </button>
                 <div></div>
@@ -204,9 +205,16 @@
         ];
 
         // --- Gemini API Integration ---
-        const GEMINI_API_KEY = "AIzaSyDJ44NNeUBB_jHa8w5dErfvhWrwDsygWRE";
+        // API key should be configured securely - using fallback mode for security
+        const GEMINI_API_KEY = null; // Removed for security - implement server-side proxy
         
         async function callGemini(prompt, isJson = true) {
+            // Security check - API key removed for client-side security
+            if (!GEMINI_API_KEY) {
+                console.warn("Gemini API key not configured - using fallback mode");
+                return null;
+            }
+            
             const generationConfig = isJson ? { 
                 "responseMimeType": "application/json", 
                 "temperature": 0.6 
